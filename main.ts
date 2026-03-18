@@ -1,7 +1,7 @@
 import { App, Editor, EditorChange, MarkdownView, Plugin, PluginSettingTab, Setting } from 'obsidian';
 import { Prec } from '@codemirror/state';
 import { keymap, EditorView } from '@codemirror/view';
-import { foldedRanges, foldEffect, foldable } from '@codemirror/language';
+import { foldedRanges, foldEffect, foldable, unfoldEffect } from '@codemirror/language';
 
 interface HeadingOutlinerSettings {
 	overrideTabOnHeadings: boolean;
@@ -46,6 +46,11 @@ function findCurrentHeading(lines: string[], cursorLine: number): number {
 		if (getHeadingLevel(lines[i]) > 0) return i;
 	}
 	return -1;
+}
+
+function findCurrentHeadingFromLines(content: string, cursorLine: number): number {
+	const lines = content.split('\n');
+	return findCurrentHeading(lines, cursorLine);
 }
 
 function findSiblingSection(lines: string[], section: SectionRange, direction: 'up' | 'down'): SectionRange | null {
@@ -143,6 +148,21 @@ function restoreFolds(cmView: EditorView, lines: number[]): void {
 	}
 }
 
+function unfoldLinesInRange(cmView: EditorView, fromLine: number, toLine: number): void {
+	const effects: any[] = [];
+	const iter = foldedRanges(cmView.state).iter();
+	while (iter.value) {
+		const line = cmView.state.doc.lineAt(iter.from).number - 1;
+		if (line >= fromLine && line <= toLine) {
+			effects.push(unfoldEffect.of({ from: iter.from, to: iter.to }));
+		}
+		iter.next();
+	}
+	if (effects.length > 0) {
+		cmView.dispatch({ effects });
+	}
+}
+
 export default class HeadingOutlinerPlugin extends Plugin {
 	settings: HeadingOutlinerSettings;
 
@@ -231,9 +251,8 @@ export default class HeadingOutlinerPlugin extends Plugin {
 		const state = cmView.state;
 		const cursorPos = state.selection.main.head;
 		const line = state.doc.lineAt(cursorPos);
-		const lineText = line.text;
 
-		if (getHeadingLevel(lineText) === 0) return false;
+		if (getHeadingLevel(line.text) === 0) return false;
 
 		const leaf = this.app.workspace.activeLeaf;
 		if (!leaf) return false;
@@ -241,7 +260,28 @@ export default class HeadingOutlinerPlugin extends Plugin {
 		if (!(view instanceof MarkdownView)) return false;
 		const editor = view.editor;
 
-		this.changeIndent(editor, delta);
+		const selections = editor.listSelections();
+		const headingLinesSet = new Set<number>();
+
+		for (const sel of selections) {
+			const fromLine = Math.min(sel.anchor.line, sel.head.line);
+			const toLine = Math.max(sel.anchor.line, sel.head.line);
+
+			if (fromLine === toLine) {
+				const h = findCurrentHeadingFromLines(editor.getValue(), fromLine);
+				if (h >= 0) headingLinesSet.add(h);
+			} else {
+				for (let i = fromLine; i <= toLine; i++) {
+					const h = findCurrentHeadingFromLines(editor.getValue(), i);
+					if (h >= 0) headingLinesSet.add(h);
+				}
+			}
+		}
+
+		if (headingLinesSet.size === 0) return false;
+
+		const headingLines = Array.from(headingLinesSet).sort((a, b) => a - b);
+		this.changeIndent(editor, delta, headingLines);
 		return true;
 	}
 
@@ -330,42 +370,60 @@ export default class HeadingOutlinerPlugin extends Plugin {
 		}
 	}
 
-	changeIndent(editor: Editor, delta: number) {
+	changeIndent(editor: Editor, delta: number, headingLines?: number[]) {
 		const cursor = editor.getCursor();
-		const lines = editor.getValue().split('\n');
-		const headingLine = findCurrentHeading(lines, cursor.line);
-		if (headingLine < 0) return;
+		const content = editor.getValue();
+		const lines = content.split('\n');
 
-		const section = getSectionRange(lines, headingLine);
+		if (!headingLines) {
+			headingLines = [findCurrentHeading(lines, cursor.line)];
+		}
+		if (headingLines.length === 0 || headingLines[0] < 0) return;
+
+		const sections = headingLines
+			.map(h => getSectionRange(lines, h))
+			.sort((a, b) => a.start - b.start);
 
 		if (delta > 0) {
-			let maxLevel = 0;
-			for (let i = section.start; i <= section.end; i++) {
-				const l = getHeadingLevel(lines[i]);
-				if (l > maxLevel) maxLevel = l;
+			for (const sec of sections) {
+				for (let i = sec.start; i <= sec.end; i++) {
+					const l = getHeadingLevel(lines[i]);
+					if (l > 0 && l + delta > 6) return;
+				}
 			}
-			if (maxLevel >= 6) return;
 		} else {
-			let minLevel = 7;
-			for (let i = section.start; i <= section.end; i++) {
-				const l = getHeadingLevel(lines[i]);
-				if (l > 0 && l < minLevel) minLevel = l;
+			for (const sec of sections) {
+				for (let i = sec.start; i <= sec.end; i++) {
+					const l = getHeadingLevel(lines[i]);
+					if (l > 0 && l + delta < 1) return;
+				}
 			}
-			if (minLevel <= 1) return;
+		}
+
+		const fromLine = sections[0].start;
+		const toLine = sections[sections.length - 1].end;
+
+		const cmView = getCmView(editor);
+		let foldedLinesBefore: number[] = [];
+		if (cmView) {
+			foldedLinesBefore = getFoldedLines(cmView);
+			unfoldLinesInRange(cmView, fromLine, toLine);
 		}
 
 		const changes: EditorChange[] = [];
-		for (let i = section.start; i <= section.end; i++) {
-			const level = getHeadingLevel(lines[i]);
-			if (level > 0) {
-				const newLevel = level + delta;
-				if (newLevel < 1 || newLevel > 6) return;
-				const newLine = '#'.repeat(newLevel) + lines[i].substring(level);
-				changes.push({
-					from: { line: i, ch: 0 },
-					to: { line: i, ch: lines[i].length },
-					text: newLine,
-				});
+
+		for (const sec of sections) {
+			for (let i = sec.start; i <= sec.end; i++) {
+				const level = getHeadingLevel(lines[i]);
+				if (level > 0) {
+					const newLevel = level + delta;
+					const newLine = '#'.repeat(newLevel) + lines[i].substring(level);
+					changes.push({
+						from: { line: i, ch: 0 },
+						to: { line: i, ch: lines[i].length },
+						text: newLine,
+					});
+				}
 			}
 		}
 
@@ -375,6 +433,10 @@ export default class HeadingOutlinerPlugin extends Plugin {
 			changes,
 			selection: { from: cursor },
 		});
+
+		if (cmView && foldedLinesBefore.length > 0) {
+			restoreFolds(cmView, foldedLinesBefore);
+		}
 	}
 
 	async loadSettings() {

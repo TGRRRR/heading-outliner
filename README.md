@@ -1,22 +1,49 @@
-## Obsidian Sample Plugin
+# Heading Outliner
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+An Obsidian plugin that brings **Outliner-style editing** to heading-based Markdown. Move, indent, and unindent entire sections using the same keyboard shortcuts you'd use with bullet lists — with zero configuration required.
 
-This project uses Typescript to provide type checking and documentation.
-The repo contains the latest plugin API (obsidian.d.ts) in Typescript Definition format, which contains TSDoc comments describing what it does.
+## Features
 
-**Note:** The Obsidian API is still in early alpha and is subject to change at any time!
+### Section Movement (`Ctrl+Shift+↑` / `Ctrl+Shift+↓`)
+Move a heading and all its content (body text + sub-headings) up or down past sibling sections. Fold state is fully preserved.
 
-### How to use
+### Indent / Unindent (`Tab` / `Shift+Tab`)
+Increase or decrease heading levels. Tab/Shift+Tab only activates when the cursor is on a heading line — body text and list items are unaffected. Works with single or multiple selected headings. Fold state is preserved.
 
-- Clone this repo.
-- `npm i` or `yarn` to install dependencies
-- `npm run dev` to start compilation in watch mode.
+### Visual Heading Indent
+Optional per-level indentation in both the editor and reading view, styled via CSS.
 
-### How to install the plugin
+### Complements Outliner
+Uses CodeMirror 6 keymaps at the same priority level as the Outliner plugin. When cursor is on a heading, this plugin handles the key. When on a list item, Outliner handles it. No conflicts.
 
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `vault/.obsidian/plugins/plugin-id/`.
+## Keyboard Shortcuts
 
-### API Documentation
+| Action | Shortcut |
+|--------|----------|
+| Move section up | `Ctrl+Shift+↑` |
+| Move section down | `Ctrl+Shift+↓` |
+| Indent section | `Tab` (on heading line) |
+| Unindent section | `Shift+Tab` (on heading line) |
 
-See https://github.com/obsidianmd/obsidian-api
+## Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Override Tab on heading lines | On | Enable indent/unindent on heading lines |
+| Indent headings by level | On | Visually indent headings by level |
+| Indent size (em) | 1.5 | Spacing per heading level |
+| Enable drag handles | Off | Phase 2 feature |
+
+## Building
+
+```bash
+npm install
+npm run build
+```
+
+The compiled files (`main.js`, `styles.css`, `manifest.json`) go in your vault's `.obsidian/plugins/heading-outliner/` folder.
+
+For development with watch mode:
+```bash
+npm run dev
+```
