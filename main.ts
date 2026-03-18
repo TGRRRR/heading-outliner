@@ -151,7 +151,6 @@ export default class HeadingOutlinerPlugin extends Plugin {
 			editorCallback: (editor: Editor) => {
 				this.moveSection(editor, 'up');
 			},
-			hotkeys: [{ modifiers: ['Ctrl', 'Shift'], key: 'ArrowUp' }],
 		});
 
 		this.addCommand({
@@ -160,7 +159,6 @@ export default class HeadingOutlinerPlugin extends Plugin {
 			editorCallback: (editor: Editor) => {
 				this.moveSection(editor, 'down');
 			},
-			hotkeys: [{ modifiers: ['Ctrl', 'Shift'], key: 'ArrowDown' }],
 		});
 
 		this.addCommand({
@@ -190,7 +188,7 @@ export default class HeadingOutlinerPlugin extends Plugin {
 		});
 
 		this.registerEditorExtension(
-			Prec.high(keymap.of([
+			Prec.highest(keymap.of([
 				{
 					key: 'Tab',
 					run: (cmView: EditorView): boolean => {
@@ -201,6 +199,18 @@ export default class HeadingOutlinerPlugin extends Plugin {
 					key: 'Shift-Tab',
 					run: (cmView: EditorView): boolean => {
 						return this.handleTabKey(cmView, -1);
+					},
+				},
+				{
+					key: 'Ctrl-Shift-ArrowUp',
+					run: (cmView: EditorView): boolean => {
+						return this.handleMoveKey(cmView, 'up');
+					},
+				},
+				{
+					key: 'Ctrl-Shift-ArrowDown',
+					run: (cmView: EditorView): boolean => {
+						return this.handleMoveKey(cmView, 'down');
 					},
 				},
 			]))
@@ -226,6 +236,22 @@ export default class HeadingOutlinerPlugin extends Plugin {
 		const editor = view.editor;
 
 		this.changeIndent(editor, delta);
+		return true;
+	}
+
+	handleMoveKey(cmView: EditorView, direction: 'up' | 'down'): boolean {
+		const state = cmView.state;
+		const cursorLine = state.doc.lineAt(state.selection.main.head).number - 1;
+		const lines = state.doc.toString().split('\n');
+
+		if (findCurrentHeading(lines, cursorLine) < 0) return false;
+
+		const leaf = this.app.workspace.activeLeaf;
+		if (!leaf) return false;
+		const view = leaf.view;
+		if (!(view instanceof MarkdownView)) return false;
+
+		this.moveSection(view.editor, direction);
 		return true;
 	}
 
