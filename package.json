@@ -1,7 +1,7 @@
 {
-  "name": "obsidian-sample-plugin",
-  "version": "0.9.7",
-  "description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+  "name": "heading-outliner",
+  "version": "0.0.1",
+  "description": "Outliner-style editing for heading-based Markdown: move, indent, and unindent full sections with keyboard shortcuts.",
   "main": "main.js",
   "scripts": {
     "dev": "rollup --config rollup.config.js -w",
