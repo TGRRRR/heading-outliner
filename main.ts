@@ -6,11 +6,15 @@ import { foldedRanges, foldEffect, foldable } from '@codemirror/language';
 interface HeadingOutlinerSettings {
 	overrideTabOnHeadings: boolean;
 	enableDragHandles: boolean;
+	headingIndent: boolean;
+	indentSize: number;
 }
 
 const DEFAULT_SETTINGS: HeadingOutlinerSettings = {
 	overrideTabOnHeadings: true,
 	enableDragHandles: false,
+	headingIndent: true,
+	indentSize: 1.5,
 };
 
 interface SectionRange {
@@ -144,6 +148,8 @@ export default class HeadingOutlinerPlugin extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
+		this.injectStylesheet();
+		this.applyStyle(this.settings.headingIndent, this.settings.indentSize);
 
 		this.addCommand({
 			id: 'move-section-up',
@@ -378,6 +384,26 @@ export default class HeadingOutlinerPlugin extends Plugin {
 	async saveSettings() {
 		await this.saveData(this.settings);
 	}
+
+	injectStylesheet() {
+		const id = 'heading-outliner-styles';
+		if (document.getElementById(id)) return;
+		const link = document.createElement('link');
+		link.id = id;
+		link.rel = 'stylesheet';
+		const base = this.manifest.dir || (document.querySelector('script[src$="main.js"]') as HTMLScriptElement)?.src.replace('/main.js', '');
+		link.href = base + '/styles.css';
+		document.head.appendChild(link);
+	}
+
+	applyStyle(enabled: boolean, size: number) {
+		document.body.classList.toggle('heading-outliner-indent', enabled);
+		document.body.style.setProperty('--heading-indent-size', `${size}em`);
+	}
+
+	onunload() {
+		this.applyStyle(false, 0);
+	}
 }
 
 class HeadingOutlinerSettingTab extends PluginSettingTab {
@@ -388,7 +414,7 @@ class HeadingOutlinerSettingTab extends PluginSettingTab {
 		this.plugin = plugin;
 	}
 
-	display(): void {
+		display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
 
@@ -400,6 +426,34 @@ class HeadingOutlinerSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.overrideTabOnHeadings)
 					.onChange(async (value) => {
 						this.plugin.settings.overrideTabOnHeadings = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName('Indent headings by level')
+			.setDesc('Visually indent headings in the editor based on their level.')
+			.addToggle(toggle =>
+				toggle
+					.setValue(this.plugin.settings.headingIndent)
+					.onChange(async (value) => {
+						this.plugin.settings.headingIndent = value;
+						this.plugin.applyStyle(value, this.plugin.settings.indentSize);
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName('Indent size (em)')
+			.setDesc('How much each heading level is indented relative to the previous level.')
+			.addSlider(slider =>
+				slider
+					.setLimits(0.5, 4, 0.5)
+					.setValue(this.plugin.settings.indentSize)
+					.setDynamicTooltip()
+					.onChange(async (value) => {
+						this.plugin.settings.indentSize = value;
+						this.plugin.applyStyle(this.plugin.settings.headingIndent, value);
 						await this.plugin.saveSettings();
 					})
 			);
