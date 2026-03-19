@@ -5,16 +5,16 @@ An Obsidian plugin that brings **Outliner-style editing** to heading-based Markd
 ## Features
 
 ### Section Movement (`Ctrl+Shift+↑` / `Ctrl+Shift+↓`)
-Move a heading and all its content (body text + sub-headings) up or down past sibling sections. Fold state is fully preserved.
+Move a heading and all its content (body text + sub-headings) up or down past sibling sections. Fold state is preserved — sections that were folded before the move stay folded afterward.
 
 ### Indent / Unindent (`Tab` / `Shift+Tab`)
-Increase or decrease heading levels. Tab/Shift+Tab only activates when the cursor is on a heading line — body text and list items are unaffected. Works with single or multiple selected headings. Fold state is preserved.
+Increase or decrease heading levels. Tab/Shift+Tab only activates when the cursor is on a heading line — body text and list items are unaffected. Supports single or multiple selected headings (range selection or multi-cursor). Fold state is preserved.
 
 ### Visual Heading Indent
 Optional per-level indentation in both the editor and reading view, styled via CSS.
 
 ### Complements Outliner
-Uses CodeMirror 6 keymaps at the same priority level as the Outliner plugin. When cursor is on a heading, this plugin handles the key. When on a list item, Outliner handles it. No conflicts.
+Uses CodeMirror 6 keymaps at `Prec.highest` priority — the same level as the Outliner plugin. When the cursor is on a heading, this plugin handles the key. When on a list item, Outliner handles it. No conflicts.
 
 ## Keyboard Shortcuts
 

@@ -325,11 +325,6 @@ export default class HeadingOutlinerPlugin extends Plugin {
 
 		const newText = [...secondLines, ...firstLines].join('\n');
 
-		const rangeFrom = { line: first.start, ch: 0 };
-		const rangeTo = { line: second.end, ch: lines[second.end].length };
-
-		editor.replaceRange(newText, rangeFrom, rangeTo);
-
 		const cursorOffset = cursor.line - section.start;
 		let newCursorLine: number;
 		if (direction === 'up') {
@@ -337,7 +332,15 @@ export default class HeadingOutlinerPlugin extends Plugin {
 		} else {
 			newCursorLine = section.start + secondLines.length + cursorOffset;
 		}
-		editor.setCursor({ line: newCursorLine, ch: cursor.ch });
+
+		editor.transaction({
+			changes: [{
+				from: { line: first.start, ch: 0 },
+				to: { line: second.end, ch: lines[second.end].length },
+				text: newText,
+			}],
+			selection: { from: { line: newCursorLine, ch: cursor.ch } },
+		});
 
 		if (cmView && foldedLinesBefore.length > 0) {
 			const sectionLen = section.end - section.start + 1;
@@ -364,9 +367,7 @@ export default class HeadingOutlinerPlugin extends Plugin {
 				}
 			}
 
-			setTimeout(() => {
-				restoreFolds(cmView, newFoldedLines);
-			}, 50);
+			restoreFolds(cmView, newFoldedLines);
 		}
 	}
 

@@ -6,7 +6,7 @@ A single Obsidian plugin that brings the **Outliner-style editing workflow** (fa
 
 The core mental model: a **section** (heading + all its content until next equal/higher heading) behaves like a movable, indent-able block exactly like a list item in Outliner.
 
-**v0.0.3 Status:** F1–F4 fully implemented. Visual indent feature added. Phase 2 (drag-and-drop) is optional.
+**v0.0.3 Status:** F1–F4 + F5 fully implemented. Phase 2 (drag-and-drop) is optional.
 
 ## Definitions
 
@@ -21,16 +21,17 @@ The core mental model: a **section** (heading + all its content until next equal
 - Move the section the cursor is in upward or downward past its sibling
 - Children and body content travel with the section
 - Works regardless of whether the section is folded or unfolded
-- Fold state is preserved by saving/restoring folded line indices
-- **Hotkey**: `Ctrl+Shift+↑` / `Ctrl+Shift+↓` (mirrors Outliner default)
+- Fold state is preserved: all previously folded lines are remapped by line-count delta and re-folded synchronously
+- **Hotkey**: `Ctrl+Shift+↑` / `Ctrl+Shift+↓`
 - Uses CM6 keymap at `Prec.highest` — no conflict with Outliner
+- Single undoable transaction (one Ctrl+Z to undo)
 
 ## F2 Indent Section — Done
 - Increases the heading level of the current heading by 1
 - All child headings within the section are also increased by 1
 - Blocked silently at H6
 - **Hotkey**: `Tab` (when cursor is on a heading line)
-- **Multi-select**: supports range selection and multi-cursor (Alt+Click) — all selected sections indent together in one undo step
+- **Multi-select**: range selection and multi-cursor (Alt+Click) — all selected sections indent together in one undoable transaction
 
 ## F3 Unindent Section — Done
 - Decreases the heading level of the current heading by 1
@@ -44,7 +45,7 @@ The core mental model: a **section** (heading + all its content until next equal
 - On body text lines or list items: default Obsidian behavior is preserved
 - **No conflict with the Outliner plugin** — both use CM6 keymaps at `Prec.highest`; each handles its own context (headings vs list items)
 
-## F5 Visual Heading Indent — Done (new in v0.0.3)
+## F5 Visual Heading Indent — Done
 - Optional per-level indentation in editor (`padding-left`) and reading view (`margin-left`)
 - Controlled by CSS variable `--heading-indent-size`
 - Settings: toggle on/off + size slider (0.5–4 em, default 1.5)
@@ -61,13 +62,13 @@ The core mental model: a **section** (heading + all its content until next equal
 - **Cursor stays in section**: after any operation, cursor remains within the same section it started in
 - **No destructive operations**: indent at H6 or unindent at H1 does nothing silently — no error, no transform
 - **Undo-compatible**: every operation is a single undoable transaction
-- **Fold preservation**: fold state is saved before and restored after any text manipulation
+- **Fold preservation**: fold state is saved before and restored after any text manipulation — no tearing or flash of unfolded content
 - **Multi-section indent**: when multiple headings are selected, all sections indent/unindent together as one undo transaction
 
 ## Out of Scope
 - List item manipulation (use Outliner plugin for that)
 - Frontmatter / YAML block handling (ignore / skip)
-- Multi-cursor or multi-selection operations for move (phase 2 consideration)
+- Multi-section move (Phase 2 consideration)
 - Exporting / converting between heading and list formats
 
 ## Settings
@@ -82,13 +83,16 @@ The core mental model: a **section** (heading + all its content until next equal
 ## Technical Notes
 
 ### CM6 Keymap Architecture
-All keyboard shortcuts use `Prec.highest` keymaps via `registerEditorExtension()`. This puts the plugin at the same priority level as Outliner. Each handler returns `false` when its context doesn't apply, allowing the next handler to try.
+All keyboard shortcuts use `Prec.highest` keymaps via `registerEditorExtension()`. This puts the plugin at the same priority level as Outliner. Each handler returns `false` when its context doesn't apply, allowing the next handler in the chain to try. Obsidian commands (`addCommand`) are registered without hotkeys for discoverability but are not the primary keybinding mechanism.
 
 ### Fold Preservation
-Fold state is captured by iterating `foldedRanges()` from `@codemirror/language`. Before any edit, affected folds are unfolded via `unfoldEffect`. After the edit, folds are restored via `foldEffect`. For indent/unindent (no line count change), original line indices are valid. For moves, indices are remapped by the line count delta.
+Fold state is captured by iterating `foldedRanges()` from `@codemirror/language`. Before any edit, affected folds are explicitly unfolded via `unfoldEffect`. After the edit, folds are restored via `foldEffect`. For indent/unindent (no line count change), original line indices remain valid. For moves, indices are remapped by the line-count delta between the swapped sections.
+
+### Single Transaction
+All operations use `editor.transaction()` with bundled changes and selection updates, ensuring a single undo step per operation.
 
 ### Multi-Section Indent
-Uses `editor.listSelections()` to detect range selections and multi-cursors. Each selection's heading is found, sections are deduplicated and sorted, then all changes are batched into a single `editor.transaction()`.
+Uses `editor.listSelections()` to detect range selections and multi-cursors. Each selection's containing heading is found, sections are deduplicated and sorted, then all changes are batched into a single transaction.
 
 ## Success Criteria
 A user coming from Outliner + list workflow should be able to:
