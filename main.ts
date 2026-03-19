@@ -165,6 +165,7 @@ function unfoldLinesInRange(cmView: EditorView, fromLine: number, toLine: number
 
 export default class HeadingOutlinerPlugin extends Plugin {
 	settings: HeadingOutlinerSettings;
+	private styleLink: HTMLLinkElement | null = null;
 
 	async onload() {
 		await this.loadSettings();
@@ -450,13 +451,17 @@ export default class HeadingOutlinerPlugin extends Plugin {
 
 	injectStylesheet() {
 		const id = 'heading-outliner-styles';
-		if (document.getElementById(id)) return;
-		const link = document.createElement('link');
-		link.id = id;
-		link.rel = 'stylesheet';
+		const existing = document.getElementById(id);
+		if (existing) {
+			this.styleLink = existing as HTMLLinkElement;
+			return;
+		}
+		this.styleLink = document.createElement('link');
+		this.styleLink.id = id;
+		this.styleLink.rel = 'stylesheet';
 		const base = this.manifest.dir || (document.querySelector('script[src$="main.js"]') as HTMLScriptElement)?.src.replace('/main.js', '');
-		link.href = base + '/styles.css';
-		document.head.appendChild(link);
+		this.styleLink.href = base + '/styles.css';
+		document.head.appendChild(this.styleLink);
 	}
 
 	applyStyle(enabled: boolean, size: number) {
@@ -466,6 +471,9 @@ export default class HeadingOutlinerPlugin extends Plugin {
 
 	onunload() {
 		this.applyStyle(false, 0);
+		this.styleLink?.remove();
+		this.styleLink = null;
+		super.onunload();
 	}
 }
 

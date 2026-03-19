@@ -8,7 +8,8 @@
     "build": "rollup --config rollup.config.js"
   },
   "keywords": [],
-  "author": "",
+  "author": "TGRRRR",
+  "repository": "https://github.com/tgrrrr/heading-outliner",
   "license": "MIT",
   "devDependencies": {
     "@rollup/plugin-commonjs": "^15.1.0",
