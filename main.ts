@@ -310,6 +310,7 @@ export default class HeadingOutlinerPlugin extends Plugin {
 
 		if (changes.length === 0) return;
 
+		const changeSet = ChangeSet.of(changes, state.doc.length);
 		const foldedBefore = getFoldedRanges(state);
 		const effects: StateEffect<unknown>[] = [];
 
@@ -321,13 +322,15 @@ export default class HeadingOutlinerPlugin extends Plugin {
 					const parentDocLine = doc.line(parentLine + 1);
 					const foldRange = foldedBefore.find(fr => fr.from === parentDocLine.from);
 					if (foldRange) {
-						effects.push(unfoldEffect.of(foldRange));
+						effects.push(unfoldEffect.of({
+							from: changeSet.mapPos(foldRange.from, 1),
+							to: changeSet.mapPos(foldRange.to, -1)
+						}));
 					}
 				}
 			}
 		}
 
-		const changeSet = ChangeSet.of(changes, state.doc.length);
 		cmView.dispatch({
 			changes,
 			effects: effects.length > 0 ? effects : undefined,
