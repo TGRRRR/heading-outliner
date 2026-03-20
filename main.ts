@@ -144,7 +144,12 @@ function findSiblingSection(state: EditorState, section: SectionRange, direction
 
 	function isLineFolded(state: EditorState, line: number, foldedRanges: { from: number; to: number }[]): boolean {
 		const docLine = state.doc.line(line + 1);
-		return foldedRanges.some(fr => fr.from === docLine.from);
+		return foldedRanges.some(fr => fr.from >= docLine.from && fr.from <= docLine.to);
+	}
+
+	function getFoldAtLine(state: EditorState, line: number, folds: { from: number; to: number }[]): { from: number; to: number } | null {
+		const docLine = state.doc.line(line + 1);
+		return folds.find(fr => fr.from >= docLine.from && fr.from <= docLine.to) || null;
 	}
 
 function filterRootHeadings(headings: HeadingInfo[]): HeadingInfo[] {
@@ -338,9 +343,8 @@ export default class HeadingOutlinerPlugin extends Plugin {
 			for (const h of rootHeadings) {
 				const newLevel = h.level + delta;
 				const parentLine = findFutureParentHeading(state, h.line, newLevel);
-				if (parentLine >= 0 && isLineFolded(state, parentLine, foldedBefore)) {
-					const parentDocLine = doc.line(parentLine + 1);
-					const foldRange = foldedBefore.find(fr => fr.from === parentDocLine.from);
+				if (parentLine >= 0) {
+					const foldRange = getFoldAtLine(state, parentLine, foldedBefore);
 					if (foldRange) {
 						parentFoldsToUnfold.push(foldRange);
 						effects.push(unfoldEffect.of({
