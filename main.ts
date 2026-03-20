@@ -1,5 +1,5 @@
-import { App, Editor, EditorChange, MarkdownView, Plugin, PluginSettingTab, Setting } from 'obsidian';
-import { Prec } from '@codemirror/state';
+import { App, Editor, MarkdownView, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { Prec, EditorState, EditorSelection, ChangeSpec, StateEffect } from '@codemirror/state';
 import { keymap, EditorView } from '@codemirror/view';
 import { foldedRanges, foldEffect, foldable, unfoldEffect } from '@codemirror/language';
 
@@ -18,9 +18,15 @@ const DEFAULT_SETTINGS: HeadingOutlinerSettings = {
 };
 
 interface SectionRange {
-	start: number;
-	end: number;
+	startLine: number;
+	endLine: number;
 	level: number;
+}
+
+interface HeadingInfo {
+	line: number;
+	level: number;
+	section: SectionRange;
 }
 
 function getHeadingLevel(line: string): number {
@@ -28,139 +34,143 @@ function getHeadingLevel(line: string): number {
 	return match ? match[1].length : 0;
 }
 
-function getSectionRange(lines: string[], headingLine: number): SectionRange {
-	const level = getHeadingLevel(lines[headingLine]);
-	if (level === 0) return { start: headingLine, end: headingLine, level: 0 };
+function getSectionRangeFromDoc(state: EditorState, headingLine: number): SectionRange {
+	const doc = state.doc;
+	const level = getHeadingLevel(doc.line(headingLine + 1).text);
+	if (level === 0) return { startLine: headingLine, endLine: headingLine, level: 0 };
 
-	let end = headingLine + 1;
-	while (end < lines.length) {
-		const l = getHeadingLevel(lines[end]);
+	let endLine = headingLine + 1;
+	while (endLine < doc.lines) {
+		const l = getHeadingLevel(doc.line(endLine + 1).text);
 		if (l > 0 && l <= level) break;
-		end++;
+		endLine++;
 	}
-	return { start: headingLine, end: end - 1, level };
+	return { startLine: headingLine, endLine: endLine - 1, level };
 }
 
-function findCurrentHeading(lines: string[], cursorLine: number): number {
+function findCurrentHeadingLine(state: EditorState, cursorLine: number): number {
 	for (let i = cursorLine; i >= 0; i--) {
-		if (getHeadingLevel(lines[i]) > 0) return i;
+		if (getHeadingLevel(state.doc.line(i + 1).text) > 0) return i;
 	}
 	return -1;
 }
 
-function findCurrentHeadingFromLines(content: string, cursorLine: number): number {
-	const lines = content.split('\n');
-	return findCurrentHeading(lines, cursorLine);
-}
-
-function findSiblingSection(lines: string[], section: SectionRange, direction: 'up' | 'down'): SectionRange | null {
-	if (direction === 'up') {
-		let candidate = section.start - 1;
-		if (candidate < 0) return null;
-
-		const candidateLevel = getHeadingLevel(lines[candidate]);
-		if (candidateLevel > 0 && candidateLevel < section.level) return null;
-
-		if (candidateLevel > 0 && candidateLevel === section.level) {
-			return getSectionRange(lines, candidate);
-		}
-
-		if (candidateLevel > 0 && candidateLevel > section.level) {
-			const parentHeading = findParentHeading(lines, candidate, section.level);
-			if (parentHeading >= 0 && getHeadingLevel(lines[parentHeading]) === section.level) {
-				return getSectionRange(lines, parentHeading);
-			}
-			return null;
-		}
-
-		for (let i = candidate; i >= 0; i--) {
-			const l = getHeadingLevel(lines[i]);
-			if (l > 0 && l === section.level) {
-				return getSectionRange(lines, i);
-			}
-			if (l > 0 && l < section.level) return null;
-		}
-		return null;
-	} else {
-		const nextStart = section.end + 1;
-		if (nextStart >= lines.length) return null;
-
-		for (let i = nextStart; i < lines.length; i++) {
-			const l = getHeadingLevel(lines[i]);
-			if (l > 0 && l < section.level) return null;
-			if (l > 0 && l === section.level) {
-				return getSectionRange(lines, i);
-			}
-		}
-		return null;
-	}
-}
-
-function findParentHeading(lines: string[], fromLine: number, maxLevel: number): number {
+function findParentHeadingLine(state: EditorState, fromLine: number, maxLevel: number): number {
 	for (let i = fromLine; i >= 0; i--) {
-		const l = getHeadingLevel(lines[i]);
+		const l = getHeadingLevel(state.doc.line(i + 1).text);
 		if (l > 0 && l <= maxLevel) return i;
 	}
 	return -1;
 }
 
-function getCmView(editor: Editor): EditorView | null {
-	return (editor as any).cm instanceof EditorView ? (editor as any).cm : null;
+function findFutureParentHeading(state: EditorState, headingLine: number, newLevel: number): number {
+	for (let i = headingLine - 1; i >= 0; i--) {
+		const l = getHeadingLevel(state.doc.line(i + 1).text);
+		if (l > 0 && l < newLevel) return i;
+	}
+	return -1;
 }
 
-function getFoldedLines(cmView: EditorView): number[] {
-	const folded: number[] = [];
-	const iter = foldedRanges(cmView.state).iter();
+function findSiblingSection(state: EditorState, section: SectionRange, direction: 'up' | 'down'): SectionRange | null {
+	const doc = state.doc;
+
+	if (direction === 'up') {
+		let candidate = section.startLine - 1;
+		if (candidate < 0) return null;
+
+		const candidateLevel = getHeadingLevel(doc.line(candidate + 1).text);
+		if (candidateLevel > 0 && candidateLevel < section.level) return null;
+
+		if (candidateLevel > 0 && candidateLevel === section.level) {
+			return getSectionRangeFromDoc(state, candidate);
+		}
+
+		if (candidateLevel > 0 && candidateLevel > section.level) {
+			const parentLine = findParentHeadingLine(state, candidate, section.level);
+			if (parentLine >= 0 && getHeadingLevel(doc.line(parentLine + 1).text) === section.level) {
+				return getSectionRangeFromDoc(state, parentLine);
+			}
+			return null;
+		}
+
+		for (let i = candidate; i >= 0; i--) {
+			const l = getHeadingLevel(doc.line(i + 1).text);
+			if (l > 0 && l === section.level) {
+				return getSectionRangeFromDoc(state, i);
+			}
+			if (l > 0 && l < section.level) return null;
+		}
+		return null;
+	} else {
+		const nextStart = section.endLine + 1;
+		if (nextStart >= doc.lines) return null;
+
+		for (let i = nextStart; i < doc.lines; i++) {
+			const l = getHeadingLevel(doc.line(i + 1).text);
+			if (l > 0 && l < section.level) return null;
+			if (l > 0 && l === section.level) {
+				return getSectionRangeFromDoc(state, i);
+			}
+		}
+		return null;
+	}
+}
+
+function getFoldedRanges(state: EditorState): { from: number; to: number }[] {
+	const folded: { from: number; to: number }[] = [];
+	const iter = foldedRanges(state).iter();
 	while (iter.value) {
-		const line = cmView.state.doc.lineAt(iter.from).number - 1;
-		folded.push(line);
+		folded.push({ from: iter.from, to: iter.to });
 		iter.next();
 	}
 	return folded;
 }
 
-function restoreFolds(cmView: EditorView, lines: number[]): void {
-	const effects: any[] = [];
-
-	for (const line of lines) {
-		if (line < 0 || line >= cmView.state.doc.lines) continue;
-		const docLine = cmView.state.doc.line(line + 1);
-
-		let alreadyFolded = false;
-		const cursor = foldedRanges(cmView.state).iter();
-		while (cursor.value) {
-			if (cursor.from === docLine.from) {
-				alreadyFolded = true;
-				break;
-			}
-			cursor.next();
-		}
-		if (alreadyFolded) continue;
-
-		const range = foldable(cmView.state, docLine.from, docLine.to);
-		if (range) {
-			effects.push(foldEffect.of(range));
-		}
-	}
-
-	if (effects.length > 0) {
-		cmView.dispatch({ effects });
-	}
+function isLineFolded(state: EditorState, line: number, foldedRanges: { from: number; to: number }[]): boolean {
+	const docLine = state.doc.line(line + 1);
+	return foldedRanges.some(fr => fr.from === docLine.from);
 }
 
-function unfoldLinesInRange(cmView: EditorView, fromLine: number, toLine: number): void {
-	const effects: any[] = [];
-	const iter = foldedRanges(cmView.state).iter();
-	while (iter.value) {
-		const line = cmView.state.doc.lineAt(iter.from).number - 1;
-		if (line >= fromLine && line <= toLine) {
-			effects.push(unfoldEffect.of({ from: iter.from, to: iter.to }));
+function filterRootHeadings(headings: HeadingInfo[]): HeadingInfo[] {
+	if (headings.length <= 1) return headings;
+
+	const sorted = [...headings].sort((a, b) => a.line - b.line);
+	const roots: HeadingInfo[] = [];
+
+	for (const h of sorted) {
+		const isContained = roots.some(r =>
+			r.section.startLine <= h.section.startLine &&
+			r.section.endLine >= h.section.endLine
+		);
+		if (!isContained) roots.push(h);
+	}
+
+	return roots;
+}
+
+function collectHeadingsFromSelections(state: EditorState): HeadingInfo[] {
+	const headings: HeadingInfo[] = [];
+	const seenLines = new Set<number>();
+
+	for (const range of state.selection.ranges) {
+		const fromLine = state.doc.lineAt(range.from).number - 1;
+		const toLine = state.doc.lineAt(range.to).number - 1;
+
+		for (let line = fromLine; line <= toLine; line++) {
+			const headingLine = findCurrentHeadingLine(state, line);
+			if (headingLine >= 0 && !seenLines.has(headingLine)) {
+				seenLines.add(headingLine);
+				const level = getHeadingLevel(state.doc.line(headingLine + 1).text);
+				headings.push({
+					line: headingLine,
+					level,
+					section: getSectionRangeFromDoc(state, headingLine)
+				});
+			}
 		}
-		iter.next();
 	}
-	if (effects.length > 0) {
-		cmView.dispatch({ effects });
-	}
+
+	return headings;
 }
 
 export default class HeadingOutlinerPlugin extends Plugin {
@@ -176,7 +186,8 @@ export default class HeadingOutlinerPlugin extends Plugin {
 			id: 'move-section-up',
 			name: 'Move section up',
 			editorCallback: (editor: Editor) => {
-				this.moveSection(editor, 'up');
+				const cmView = (editor as any).cm as EditorView | undefined;
+				if (cmView) this.moveSectionCM6(cmView, 'up');
 			},
 		});
 
@@ -184,7 +195,8 @@ export default class HeadingOutlinerPlugin extends Plugin {
 			id: 'move-section-down',
 			name: 'Move section down',
 			editorCallback: (editor: Editor) => {
-				this.moveSection(editor, 'down');
+				const cmView = (editor as any).cm as EditorView | undefined;
+				if (cmView) this.moveSectionCM6(cmView, 'down');
 			},
 		});
 
@@ -192,11 +204,11 @@ export default class HeadingOutlinerPlugin extends Plugin {
 			id: 'indent-section',
 			name: 'Indent section',
 			editorCheckCallback: (checking: boolean, editor: Editor) => {
-				if (!this.settings.overrideTabOnHeadings) return false;
-				const cursor = editor.getCursor();
-				const line = editor.getLine(cursor.line);
-				if (getHeadingLevel(line) === 0) return false;
-				if (!checking) this.changeIndent(editor, 1);
+				const cmView = (editor as any).cm as EditorView | undefined;
+				if (!cmView) return false;
+				const cursorLine = cmView.state.doc.lineAt(cmView.state.selection.main.head).number - 1;
+				if (findCurrentHeadingLine(cmView.state, cursorLine) < 0) return false;
+				if (!checking) this.changeIndentCM6(cmView, 1);
 				return true;
 			},
 		});
@@ -205,11 +217,11 @@ export default class HeadingOutlinerPlugin extends Plugin {
 			id: 'unindent-section',
 			name: 'Unindent section',
 			editorCheckCallback: (checking: boolean, editor: Editor) => {
-				if (!this.settings.overrideTabOnHeadings) return false;
-				const cursor = editor.getCursor();
-				const line = editor.getLine(cursor.line);
-				if (getHeadingLevel(line) === 0) return false;
-				if (!checking) this.changeIndent(editor, -1);
+				const cmView = (editor as any).cm as EditorView | undefined;
+				if (!cmView) return false;
+				const cursorLine = cmView.state.doc.lineAt(cmView.state.selection.main.head).number - 1;
+				if (findCurrentHeadingLine(cmView.state, cursorLine) < 0) return false;
+				if (!checking) this.changeIndentCM6(cmView, -1);
 				return true;
 			},
 		});
@@ -218,27 +230,19 @@ export default class HeadingOutlinerPlugin extends Plugin {
 			Prec.highest(keymap.of([
 				{
 					key: 'Tab',
-					run: (cmView: EditorView): boolean => {
-						return this.handleTabKey(cmView, 1);
-					},
+					run: (cmView: EditorView): boolean => this.handleTabKey(cmView, 1),
 				},
 				{
 					key: 'Shift-Tab',
-					run: (cmView: EditorView): boolean => {
-						return this.handleTabKey(cmView, -1);
-					},
+					run: (cmView: EditorView): boolean => this.handleTabKey(cmView, -1),
 				},
 				{
 					key: 'Ctrl-Shift-ArrowUp',
-					run: (cmView: EditorView): boolean => {
-						return this.handleMoveKey(cmView, 'up');
-					},
+					run: (cmView: EditorView): boolean => this.handleMoveKey(cmView, 'up'),
 				},
 				{
 					key: 'Ctrl-Shift-ArrowDown',
-					run: (cmView: EditorView): boolean => {
-						return this.handleMoveKey(cmView, 'down');
-					},
+					run: (cmView: EditorView): boolean => this.handleMoveKey(cmView, 'down'),
 				},
 			]))
 		);
@@ -251,193 +255,190 @@ export default class HeadingOutlinerPlugin extends Plugin {
 
 		const state = cmView.state;
 		const cursorPos = state.selection.main.head;
-		const line = state.doc.lineAt(cursorPos);
+		const cursorLine = state.doc.lineAt(cursorPos).number - 1;
 
-		if (getHeadingLevel(line.text) === 0) return false;
+		if (findCurrentHeadingLine(state, cursorLine) < 0) return false;
 
-		const leaf = this.app.workspace.activeLeaf;
-		if (!leaf) return false;
-		const view = leaf.view;
-		if (!(view instanceof MarkdownView)) return false;
-		const editor = view.editor;
-
-		const selections = editor.listSelections();
-		const headingLinesSet = new Set<number>();
-
-		for (const sel of selections) {
-			const fromLine = Math.min(sel.anchor.line, sel.head.line);
-			const toLine = Math.max(sel.anchor.line, sel.head.line);
-
-			if (fromLine === toLine) {
-				const h = findCurrentHeadingFromLines(editor.getValue(), fromLine);
-				if (h >= 0) headingLinesSet.add(h);
-			} else {
-				for (let i = fromLine; i <= toLine; i++) {
-					const h = findCurrentHeadingFromLines(editor.getValue(), i);
-					if (h >= 0) headingLinesSet.add(h);
-				}
-			}
-		}
-
-		if (headingLinesSet.size === 0) return false;
-
-		const headingLines = Array.from(headingLinesSet).sort((a, b) => a - b);
-		this.changeIndent(editor, delta, headingLines);
+		this.changeIndentCM6(cmView, delta);
 		return true;
 	}
 
 	handleMoveKey(cmView: EditorView, direction: 'up' | 'down'): boolean {
 		const state = cmView.state;
 		const cursorLine = state.doc.lineAt(state.selection.main.head).number - 1;
-		const lines = state.doc.toString().split('\n');
 
-		if (findCurrentHeading(lines, cursorLine) < 0) return false;
+		if (findCurrentHeadingLine(state, cursorLine) < 0) return false;
 
-		const leaf = this.app.workspace.activeLeaf;
-		if (!leaf) return false;
-		const view = leaf.view;
-		if (!(view instanceof MarkdownView)) return false;
-
-		this.moveSection(view.editor, direction);
+		this.moveSectionCM6(cmView, direction);
 		return true;
 	}
 
-	moveSection(editor: Editor, direction: 'up' | 'down') {
-		const cursor = editor.getCursor();
-		const lines = editor.getValue().split('\n');
-		const headingLine = findCurrentHeading(lines, cursor.line);
-		if (headingLine < 0) return;
+	changeIndentCM6(cmView: EditorView, delta: number) {
+		const state = cmView.state;
 
-		const section = getSectionRange(lines, headingLine);
-		const sibling = findSiblingSection(lines, section, direction);
-		if (!sibling) return;
+		const allHeadings = collectHeadingsFromSelections(state);
+		if (allHeadings.length === 0) return;
 
-		const cmView = getCmView(editor);
-		let foldedLinesBefore: number[] = [];
-		if (cmView) {
-			foldedLinesBefore = getFoldedLines(cmView);
-		}
+		const rootHeadings = filterRootHeadings(allHeadings);
+		if (rootHeadings.length === 0) return;
 
-		const first = direction === 'up' ? sibling : section;
-		const second = direction === 'up' ? section : sibling;
+		const changes: ChangeSpec[] = [];
+		const doc = state.doc;
 
-		const firstLines = lines.slice(first.start, first.end + 1);
-		const secondLines = lines.slice(second.start, second.end + 1);
-
-		const newText = [...secondLines, ...firstLines].join('\n');
-
-		const cursorOffset = cursor.line - section.start;
-		let newCursorLine: number;
-		if (direction === 'up') {
-			newCursorLine = sibling.start + cursorOffset;
-		} else {
-			newCursorLine = section.start + secondLines.length + cursorOffset;
-		}
-
-		editor.transaction({
-			changes: [{
-				from: { line: first.start, ch: 0 },
-				to: { line: second.end, ch: lines[second.end].length },
-				text: newText,
-			}],
-			selection: { from: { line: newCursorLine, ch: cursor.ch } },
-		});
-
-		if (cmView && foldedLinesBefore.length > 0) {
-			const sectionLen = section.end - section.start + 1;
-			const siblingLen = sibling.end - sibling.start + 1;
-
-			const newFoldedLines: number[] = [];
-			for (const fLine of foldedLinesBefore) {
-				if (direction === 'up') {
-					if (fLine >= section.start && fLine <= section.end) {
-						newFoldedLines.push(fLine - siblingLen);
-					} else if (fLine >= sibling.start && fLine <= sibling.end) {
-						newFoldedLines.push(fLine + sectionLen);
-					} else {
-						newFoldedLines.push(fLine);
-					}
-				} else {
-					if (fLine >= section.start && fLine <= section.end) {
-						newFoldedLines.push(fLine + siblingLen);
-					} else if (fLine >= sibling.start && fLine <= sibling.end) {
-						newFoldedLines.push(fLine - sectionLen);
-					} else {
-						newFoldedLines.push(fLine);
-					}
-				}
-			}
-
-			restoreFolds(cmView, newFoldedLines);
-		}
-	}
-
-	changeIndent(editor: Editor, delta: number, headingLines?: number[]) {
-		const cursor = editor.getCursor();
-		const content = editor.getValue();
-		const lines = content.split('\n');
-
-		if (!headingLines) {
-			headingLines = [findCurrentHeading(lines, cursor.line)];
-		}
-		if (headingLines.length === 0 || headingLines[0] < 0) return;
-
-		const sections = headingLines
-			.map(h => getSectionRange(lines, h))
-			.sort((a, b) => a.start - b.start);
-
-		if (delta > 0) {
-			for (const sec of sections) {
-				for (let i = sec.start; i <= sec.end; i++) {
-					const l = getHeadingLevel(lines[i]);
-					if (l > 0 && l + delta > 6) return;
-				}
-			}
-		} else {
-			for (const sec of sections) {
-				for (let i = sec.start; i <= sec.end; i++) {
-					const l = getHeadingLevel(lines[i]);
-					if (l > 0 && l + delta < 1) return;
-				}
+		const affectedLines = new Set<number>();
+		for (const h of rootHeadings) {
+			for (let line = h.section.startLine; line <= h.section.endLine; line++) {
+				affectedLines.add(line);
 			}
 		}
 
-		const fromLine = sections[0].start;
-		const toLine = sections[sections.length - 1].end;
+		for (const line of Array.from(affectedLines)) {
+			const docLine = doc.line(line + 1);
+			const level = getHeadingLevel(docLine.text);
+			if (level === 0) continue;
 
-		const cmView = getCmView(editor);
-		let foldedLinesBefore: number[] = [];
-		if (cmView) {
-			foldedLinesBefore = getFoldedLines(cmView);
-			unfoldLinesInRange(cmView, fromLine, toLine);
-		}
+			const newLevel = level + delta;
+			if (newLevel < 1 || newLevel > 6) continue;
 
-		const changes: EditorChange[] = [];
-
-		for (const sec of sections) {
-			for (let i = sec.start; i <= sec.end; i++) {
-				const level = getHeadingLevel(lines[i]);
-				if (level > 0) {
-					const newLevel = level + delta;
-					const newLine = '#'.repeat(newLevel) + lines[i].substring(level);
-					changes.push({
-						from: { line: i, ch: 0 },
-						to: { line: i, ch: lines[i].length },
-						text: newLine,
-					});
-				}
-			}
+			const hashCount = level;
+			changes.push({
+				from: docLine.from,
+				to: docLine.from + hashCount,
+				insert: '#'.repeat(newLevel)
+			});
 		}
 
 		if (changes.length === 0) return;
 
-		editor.transaction({
+		const foldedBefore = getFoldedRanges(state);
+		const effects: StateEffect<unknown>[] = [];
+
+		const unfoldEffects: StateEffect<unknown>[] = [];
+		for (const fr of foldedBefore) {
+			unfoldEffects.push(unfoldEffect.of(fr));
+		}
+		if (unfoldEffects.length > 0) {
+			effects.push(...unfoldEffects);
+		}
+
+		if (delta > 0) {
+			for (const h of rootHeadings) {
+				const newLevel = h.level + delta;
+				const parentLine = findFutureParentHeading(state, h.line, newLevel);
+				if (parentLine >= 0) {
+					if (isLineFolded(state, parentLine, foldedBefore)) {
+						const parentDocLine = doc.line(parentLine + 1);
+						const foldRange = foldedBefore.find(fr => fr.from === parentDocLine.from);
+						if (foldRange) {
+							effects.push(unfoldEffect.of(foldRange));
+						}
+					}
+				}
+			}
+		}
+
+		cmView.dispatch({
 			changes,
-			selection: { from: cursor },
+			effects: effects.length > 0 ? effects : undefined,
+			selection: state.selection.map(cmView.state.changes(changes))
+		});
+	}
+
+	moveSectionCM6(cmView: EditorView, direction: 'up' | 'down') {
+		const state = cmView.state;
+		const cursorLine = state.doc.lineAt(state.selection.main.head).number - 1;
+		const cursorCh = state.selection.main.head - state.doc.line(cursorLine + 1).from;
+		const headingLine = findCurrentHeadingLine(state, cursorLine);
+
+		if (headingLine < 0) return;
+
+		const section = getSectionRangeFromDoc(state, headingLine);
+		const sibling = findSiblingSection(state, section, direction);
+		if (!sibling) return;
+
+		const doc = state.doc;
+
+		const firstSectionLines: string[] = [];
+		for (let i = section.startLine; i <= section.endLine; i++) {
+			firstSectionLines.push(doc.line(i + 1).text);
+		}
+		const secondSectionLines: string[] = [];
+		for (let i = sibling.startLine; i <= sibling.endLine; i++) {
+			secondSectionLines.push(doc.line(i + 1).text);
+		}
+
+		const newText = direction === 'up'
+			? [...firstSectionLines, ...secondSectionLines].join('\n')
+			: [...secondSectionLines, ...firstSectionLines].join('\n');
+
+		const foldedBefore = getFoldedRanges(state);
+		const unfoldEffects = foldedBefore.map(fr => unfoldEffect.of(fr));
+
+		const sectionLen = section.endLine - section.startLine + 1;
+		const siblingLen = sibling.endLine - sibling.startLine + 1;
+
+		const cursorOffsetInSection = cursorLine - section.startLine;
+		let newCursorLine: number;
+		if (direction === 'up') {
+			newCursorLine = sibling.startLine + cursorOffsetInSection;
+		} else {
+			newCursorLine = section.startLine + siblingLen + cursorOffsetInSection;
+		}
+
+		const linesBeforeCursor = newText.split('\n').slice(0, newCursorLine - Math.min(section.startLine, sibling.startLine));
+		const cursorOffset = linesBeforeCursor.reduce((sum, l) => sum + l.length + 1, 0);
+
+		const targetLineText = newText.split('\n')[newCursorLine - Math.min(section.startLine, sibling.startLine)] || '';
+		const newCursorCh = Math.min(cursorCh, targetLineText.length);
+
+		const change = {
+			from: doc.line(Math.min(section.startLine, sibling.startLine) + 1).from,
+			to: doc.line(Math.max(section.endLine, sibling.endLine) + 1).to,
+			insert: newText
+		};
+
+		cmView.dispatch({
+			changes: change,
+			effects: unfoldEffects,
+			selection: EditorSelection.cursor(doc.line(Math.min(section.startLine, sibling.startLine) + 1).from + cursorOffset + newCursorCh)
 		});
 
-		if (cmView && foldedLinesBefore.length > 0) {
-			restoreFolds(cmView, foldedLinesBefore);
+		const newState = cmView.state;
+		const newFoldEffects: StateEffect<unknown>[] = [];
+
+		for (const fr of foldedBefore) {
+			const oldLine = doc.lineAt(fr.from).number - 1;
+			let newLine: number;
+
+			if (direction === 'up') {
+				if (oldLine >= section.startLine && oldLine <= section.endLine) {
+					newLine = oldLine - siblingLen;
+				} else if (oldLine >= sibling.startLine && oldLine <= sibling.endLine) {
+					newLine = oldLine + sectionLen;
+				} else {
+					newLine = oldLine;
+				}
+			} else {
+				if (oldLine >= section.startLine && oldLine <= section.endLine) {
+					newLine = oldLine + siblingLen;
+				} else if (oldLine >= sibling.startLine && oldLine <= sibling.endLine) {
+					newLine = oldLine - sectionLen;
+				} else {
+					newLine = oldLine;
+				}
+			}
+
+			if (newLine >= 0 && newLine < newState.doc.lines) {
+				const newDocLine = newState.doc.line(newLine + 1);
+				const foldRange = foldable(newState, newDocLine.from, newDocLine.to);
+				if (foldRange) {
+					newFoldEffects.push(foldEffect.of(foldRange));
+				}
+			}
+		}
+
+		if (newFoldEffects.length > 0) {
+			cmView.dispatch({ effects: newFoldEffects });
 		}
 	}
 
@@ -485,7 +486,7 @@ class HeadingOutlinerSettingTab extends PluginSettingTab {
 		this.plugin = plugin;
 	}
 
-		display(): void {
+	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
 
