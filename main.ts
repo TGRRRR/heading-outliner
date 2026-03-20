@@ -116,20 +116,36 @@ function findSiblingSection(state: EditorState, section: SectionRange, direction
 	}
 }
 
-function getFoldedRanges(state: EditorState): { from: number; to: number }[] {
-	const folded: { from: number; to: number }[] = [];
-	const iter = foldedRanges(state).iter();
-	while (iter.value) {
-		folded.push({ from: iter.from, to: iter.to });
-		iter.next();
+	function getFoldedRanges(state: EditorState): { from: number; to: number }[] {
+		const folded: { from: number; to: number }[] = [];
+		const iter = foldedRanges(state).iter();
+		while (iter.value) {
+			folded.push({ from: iter.from, to: iter.to });
+			iter.next();
+		}
+		return folded;
 	}
-	return folded;
-}
 
-function isLineFolded(state: EditorState, line: number, foldedRanges: { from: number; to: number }[]): boolean {
-	const docLine = state.doc.line(line + 1);
-	return foldedRanges.some(fr => fr.from === docLine.from);
-}
+	function getFoldsInSections(
+		state: EditorState,
+		folds: { from: number; to: number }[],
+		sections: SectionRange[]
+	): { from: number; to: number }[] {
+		const result: { from: number; to: number }[] = [];
+		for (const fold of folds) {
+			const foldLine = state.doc.lineAt(fold.from).number - 1;
+			const inSection = sections.some(s => s.startLine <= foldLine && foldLine <= s.endLine);
+			if (inSection) {
+				result.push(fold);
+			}
+		}
+		return result;
+	}
+
+	function isLineFolded(state: EditorState, line: number, foldedRanges: { from: number; to: number }[]): boolean {
+		const docLine = state.doc.line(line + 1);
+		return foldedRanges.some(fr => fr.from === docLine.from);
+	}
 
 function filterRootHeadings(headings: HeadingInfo[]): HeadingInfo[] {
 	if (headings.length <= 1) return headings;
@@ -312,6 +328,10 @@ export default class HeadingOutlinerPlugin extends Plugin {
 
 		const changeSet = ChangeSet.of(changes, state.doc.length);
 		const foldedBefore = getFoldedRanges(state);
+		const affectedSections = rootHeadings.map(h => h.section);
+		const foldsToPreserve = getFoldsInSections(state, foldedBefore, affectedSections);
+
+		const parentFoldsToUnfold: { from: number; to: number }[] = [];
 		const effects: StateEffect<unknown>[] = [];
 
 		if (delta > 0) {
@@ -322,6 +342,7 @@ export default class HeadingOutlinerPlugin extends Plugin {
 					const parentDocLine = doc.line(parentLine + 1);
 					const foldRange = foldedBefore.find(fr => fr.from === parentDocLine.from);
 					if (foldRange) {
+						parentFoldsToUnfold.push(foldRange);
 						effects.push(unfoldEffect.of({
 							from: changeSet.mapPos(foldRange.from, 1),
 							to: changeSet.mapPos(foldRange.to, -1)
@@ -331,11 +352,34 @@ export default class HeadingOutlinerPlugin extends Plugin {
 			}
 		}
 
+		const foldsToRestore = foldsToPreserve.filter(f =>
+			!parentFoldsToUnfold.some(pf => pf.from === f.from && pf.to === f.to)
+		);
+
 		cmView.dispatch({
 			changes,
 			effects: effects.length > 0 ? effects : undefined,
 			selection: state.selection.map(changeSet.desc)
 		});
+
+		if (foldsToRestore.length > 0) {
+			const newState = cmView.state;
+			const currentFolds = getFoldedRanges(newState);
+			const currentFoldFroms = new Set(currentFolds.map(f => f.from));
+
+			const restoreEffects: StateEffect<unknown>[] = [];
+			for (const fold of foldsToRestore) {
+				const mappedFrom = changeSet.mapPos(fold.from, 1);
+				if (!currentFoldFroms.has(mappedFrom)) {
+					const mappedTo = changeSet.mapPos(fold.to, -1);
+					restoreEffects.push(foldEffect.of({ from: mappedFrom, to: mappedTo }));
+				}
+			}
+
+			if (restoreEffects.length > 0) {
+				cmView.dispatch({ effects: restoreEffects });
+			}
+		}
 	}
 
 	moveSectionCM6(cmView: EditorView, direction: 'up' | 'down') {
