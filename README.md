@@ -10,6 +10,8 @@ Move a heading and all its content (body text + sub-headings) up or down past si
 ### Indent / Unindent (`Tab` / `Shift+Tab`)
 Increase or decrease heading levels. Tab/Shift+Tab only activates when the cursor is on a heading line — body text and list items are unaffected. Supports single or multiple selected headings (range selection or multi-cursor). Fold state is preserved.
 
+**Smart fold handling:** When indenting a heading to become a child of a folded parent, the parent automatically unfolds to show the new child. All other fold states remain unchanged.
+
 ### Visual Heading Indent
 Optional per-level indentation in both the editor and reading view, styled via CSS.
 
@@ -47,3 +49,15 @@ For development with watch mode:
 ```bash
 npm run dev
 ```
+
+## Changelog
+
+### 0.0.4
+- **Fixed:** Multi-selection now preserves all selections after indent/unindent
+- **Fixed:** Nested headings no longer cause duplicate text changes
+- **Fixed:** Fold states are now properly preserved during operations
+- **Fixed:** When indenting into a folded parent, only that parent unfolds (siblings stay folded)
+- **Refactored:** All operations now use native CodeMirror 6 API for better reliability
+
+### 0.0.3
+- Initial release with core features (F1-F5)
