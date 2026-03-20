@@ -1,5 +1,5 @@
 import { App, Editor, MarkdownView, Plugin, PluginSettingTab, Setting } from 'obsidian';
-import { Prec, EditorState, EditorSelection, ChangeSpec, StateEffect } from '@codemirror/state';
+import { Prec, EditorState, EditorSelection, ChangeSpec, StateEffect, ChangeSet } from '@codemirror/state';
 import { keymap, EditorView } from '@codemirror/view';
 import { foldedRanges, foldEffect, foldable, unfoldEffect } from '@codemirror/language';
 
@@ -313,34 +313,25 @@ export default class HeadingOutlinerPlugin extends Plugin {
 		const foldedBefore = getFoldedRanges(state);
 		const effects: StateEffect<unknown>[] = [];
 
-		const unfoldEffects: StateEffect<unknown>[] = [];
-		for (const fr of foldedBefore) {
-			unfoldEffects.push(unfoldEffect.of(fr));
-		}
-		if (unfoldEffects.length > 0) {
-			effects.push(...unfoldEffects);
-		}
-
 		if (delta > 0) {
 			for (const h of rootHeadings) {
 				const newLevel = h.level + delta;
 				const parentLine = findFutureParentHeading(state, h.line, newLevel);
-				if (parentLine >= 0) {
-					if (isLineFolded(state, parentLine, foldedBefore)) {
-						const parentDocLine = doc.line(parentLine + 1);
-						const foldRange = foldedBefore.find(fr => fr.from === parentDocLine.from);
-						if (foldRange) {
-							effects.push(unfoldEffect.of(foldRange));
-						}
+				if (parentLine >= 0 && isLineFolded(state, parentLine, foldedBefore)) {
+					const parentDocLine = doc.line(parentLine + 1);
+					const foldRange = foldedBefore.find(fr => fr.from === parentDocLine.from);
+					if (foldRange) {
+						effects.push(unfoldEffect.of(foldRange));
 					}
 				}
 			}
 		}
 
+		const changeSet = ChangeSet.of(changes, state.doc.length);
 		cmView.dispatch({
 			changes,
 			effects: effects.length > 0 ? effects : undefined,
-			selection: state.selection.map(cmView.state.changes(changes))
+			selection: state.selection.map(changeSet.desc)
 		});
 	}
 
