@@ -17,7 +17,7 @@ The core mental model: a **section** (heading + all its content until next equal
 - Children and body content travel with the section
 - Works regardless of whether the section is folded or unfolded
 - Fold state is preserved: all previously folded lines are remapped by line-count delta and re-folded synchronously
-- **Hotkey**: `Ctrl+Shift+↑` / `Ctrl+Shift+↓`
+- **Hotkey**: `Ctrl+Shift+↑` / `Ctrl+Shift+↓` (configurable)
 - Uses CM6 keymap at `Prec.high` - no conflict with Outliner
 - Single undoable transaction (one Ctrl+Z to undo)
 
@@ -106,7 +106,7 @@ All operations use CM6's native transaction system, ensuring a single undo step 
 # Out of Scope
 - List item manipulation (use Outliner plugin for that)
 - Frontmatter / YAML block handling (ignore / skip)
-- Multi-section move (Phase 2 consideration)
+- Multi-cursor or multi-selection move (Phase 2 consideration)
 - Exporting / converting between heading and list formats
 
 # Settings
