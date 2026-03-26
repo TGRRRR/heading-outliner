@@ -1,5 +1,4 @@
 # Tasks
-- [ ] When plugin is on - indenting regular text becomes impossible #bug 
 # Overview
 Obsidian plugin that brings the **Outliner-style editing workflow** (fast block manipulation via keyboard) to **regular heading-based Markdown**, with no required configuration.
 The core mental model: a **section** (heading + all its content until next equal/higher heading) behaves like a movable, indent-able block exactly like a list item in Outliner.

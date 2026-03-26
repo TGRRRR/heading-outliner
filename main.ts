@@ -278,7 +278,8 @@ export default class HeadingOutlinerPlugin extends Plugin {
 		const cursorPos = state.selection.main.head;
 		const cursorLine = state.doc.lineAt(cursorPos).number - 1;
 
-		if (findCurrentHeadingLine(state, cursorLine) < 0) return false;
+		const currentLineLevel = getHeadingLevel(state.doc.line(cursorLine + 1).text);
+		if (currentLineLevel === 0) return false;
 
 		this.changeIndentCM6(cmView, delta);
 		return true;
