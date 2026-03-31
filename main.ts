@@ -1,7 +1,13 @@
-import { App, Editor, MarkdownView, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Editor, Plugin, PluginSettingTab, Setting } from 'obsidian';
 import { Prec, EditorState, EditorSelection, ChangeSpec, StateEffect, ChangeSet } from '@codemirror/state';
 import { keymap, EditorView } from '@codemirror/view';
 import { foldedRanges, foldEffect, foldable, unfoldEffect } from '@codemirror/language';
+
+declare module 'obsidian' {
+	interface Editor {
+		cm?: EditorView;
+	}
+}
 
 interface HeadingOutlinerSettings {
 	overrideTabOnHeadings: boolean;
@@ -196,19 +202,16 @@ function collectHeadingsFromSelections(state: EditorState): HeadingInfo[] {
 
 export default class HeadingOutlinerPlugin extends Plugin {
 	settings: HeadingOutlinerSettings;
-	private styleLink: HTMLLinkElement | null = null;
 
 	async onload() {
 		await this.loadSettings();
-		this.injectStylesheet();
 		this.applyStyle(this.settings.headingIndent, this.settings.indentSize);
 
 		this.addCommand({
 			id: 'move-section-up',
 			name: 'Move section up',
 			editorCallback: (editor: Editor) => {
-				const cmView = (editor as any).cm as EditorView | undefined;
-				if (cmView) this.moveSectionCM6(cmView, 'up');
+				if (editor.cm) this.moveSectionCM6(editor.cm, 'up');
 			},
 		});
 
@@ -216,8 +219,7 @@ export default class HeadingOutlinerPlugin extends Plugin {
 			id: 'move-section-down',
 			name: 'Move section down',
 			editorCallback: (editor: Editor) => {
-				const cmView = (editor as any).cm as EditorView | undefined;
-				if (cmView) this.moveSectionCM6(cmView, 'down');
+				if (editor.cm) this.moveSectionCM6(editor.cm, 'down');
 			},
 		});
 
@@ -225,11 +227,10 @@ export default class HeadingOutlinerPlugin extends Plugin {
 			id: 'indent-section',
 			name: 'Indent section',
 			editorCheckCallback: (checking: boolean, editor: Editor) => {
-				const cmView = (editor as any).cm as EditorView | undefined;
-				if (!cmView) return false;
-				const cursorLine = cmView.state.doc.lineAt(cmView.state.selection.main.head).number - 1;
-				if (findCurrentHeadingLine(cmView.state, cursorLine) < 0) return false;
-				if (!checking) this.changeIndentCM6(cmView, 1);
+				if (!editor.cm) return false;
+				const cursorLine = editor.cm.state.doc.lineAt(editor.cm.state.selection.main.head).number - 1;
+				if (findCurrentHeadingLine(editor.cm.state, cursorLine) < 0) return false;
+				if (!checking) this.changeIndentCM6(editor.cm, 1);
 				return true;
 			},
 		});
@@ -238,11 +239,10 @@ export default class HeadingOutlinerPlugin extends Plugin {
 			id: 'unindent-section',
 			name: 'Unindent section',
 			editorCheckCallback: (checking: boolean, editor: Editor) => {
-				const cmView = (editor as any).cm as EditorView | undefined;
-				if (!cmView) return false;
-				const cursorLine = cmView.state.doc.lineAt(cmView.state.selection.main.head).number - 1;
-				if (findCurrentHeadingLine(cmView.state, cursorLine) < 0) return false;
-				if (!checking) this.changeIndentCM6(cmView, -1);
+				if (!editor.cm) return false;
+				const cursorLine = editor.cm.state.doc.lineAt(editor.cm.state.selection.main.head).number - 1;
+				if (findCurrentHeadingLine(editor.cm.state, cursorLine) < 0) return false;
+				if (!checking) this.changeIndentCM6(editor.cm, -1);
 				return true;
 			},
 		});
@@ -493,21 +493,6 @@ export default class HeadingOutlinerPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
-	injectStylesheet() {
-		const id = 'heading-outliner-styles';
-		const existing = document.getElementById(id);
-		if (existing) {
-			this.styleLink = existing as HTMLLinkElement;
-			return;
-		}
-		this.styleLink = document.createElement('link');
-		this.styleLink.id = id;
-		this.styleLink.rel = 'stylesheet';
-		const base = this.manifest.dir || (document.querySelector('script[src$="main.js"]') as HTMLScriptElement)?.src.replace('/main.js', '');
-		this.styleLink.href = base + '/styles.css';
-		document.head.appendChild(this.styleLink);
-	}
-
 	applyStyle(enabled: boolean, size: number) {
 		document.body.classList.toggle('heading-outliner-indent', enabled);
 		document.body.style.setProperty('--heading-indent-size', `${size}em`);
@@ -515,9 +500,6 @@ export default class HeadingOutlinerPlugin extends Plugin {
 
 	onunload() {
 		this.applyStyle(false, 0);
-		this.styleLink?.remove();
-		this.styleLink = null;
-		super.onunload();
 	}
 }
 
