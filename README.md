@@ -1,4 +1,4 @@
-#Overview
+# Overview
 Heading Outliner is an Obsidian plugin that brings **Outliner-style editing** to heading-based Markdown. Move, indent, and unindent entire sections using the same keyboard hotkeys as bullet lists.
 # Features
 ## Section movement (`Ctrl+Shift+↑` / `Ctrl+Shift+↓`)
