@@ -1,15 +1,7 @@
-import { App, Editor, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Plugin, PluginSettingTab, Setting } from 'obsidian';
 import { Prec, EditorState, EditorSelection, ChangeSpec, StateEffect, ChangeSet } from '@codemirror/state';
 import { keymap, EditorView } from '@codemirror/view';
 import { foldedRanges, foldEffect, foldable, unfoldEffect } from '@codemirror/language';
-
-// We need to access the underlying CodeMirror 6 EditorView for advanced operations.
-// This is an undocumented property, but necessary for CM6-specific features in Desktop.
-declare module 'obsidian' {
-	interface Editor {
-		cm?: EditorView;
-	}
-}
 
 interface HeadingOutlinerSettings {
 	headingIndent: boolean;
@@ -204,8 +196,6 @@ export default class HeadingOutlinerPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 		this.applyStyle(this.settings.headingIndent, this.settings.indentSize);
-
-
 
 		this.registerEditorExtension(
 			Prec.high(keymap.of([
