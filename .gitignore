@@ -9,3 +9,7 @@ package-lock.json
 # build
 main.js
 *.js.map
+
+# user data and scripts
+data.json
+deploy.js

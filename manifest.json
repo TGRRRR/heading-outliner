@@ -2,8 +2,10 @@
   "id": "heading-outliner",
   "name": "Heading Outliner",
   "version": "0.0.4",
-  "minAppVersion": "0.12.0",
+  "minAppVersion": "1.0.0",
   "description": "Outliner-style editing for heading-based Markdown: move, indent, and unindent full sections with keyboard shortcuts.",
   "author": "TGRRRR",
-  "isDesktopOnly": false
+  "authorUrl": "https://github.com/TGRRRR",
+  "fundingUrl": "https://ko-fi.com/tigr19",
+  "isDesktopOnly": true
 }

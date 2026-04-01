@@ -1,4 +1,6 @@
 # Tasks
+- [ ] Implement moving all selected blocks up/down, same way as indenting/unindenting selected blocks work
+- [ ] Implement Drag-n-drop
 # Overview
 Obsidian plugin that brings the **Outliner-style editing workflow** (fast block manipulation via keyboard) to **regular heading-based Markdown**, with no required configuration.
 The core mental model: a **section** (heading + all its content until next equal/higher heading) behaves like a movable, indent-able block exactly like a list item in Outliner.
@@ -45,7 +47,6 @@ The core mental model: a **section** (heading + all its content until next equal
 - Drag handle rendered in the editor gutter next to each heading
 - Dragging moves the full section to the target position
 - Works on both folded and unfolded sections
-- **Setting flag**: "Enable drag handles" (default: OFF)
 # Behaviors
 - **Cascade is mandatory**: indent/unindent always affects the full section subtree, never just the heading line alone
 - **Move respects section boundaries**: moving down means swapping with the next sibling at the same or higher level, not just the next line
@@ -95,16 +96,6 @@ All operations use CM6's native transaction system, ensuring a single undo step 
 # Settings
 | Setting                       | Default | Description                  |
 | ----------------------------- | ------- | ---------------------------- |
-| Override Tab on heading lines | ON      | Enable F2/F3 hotkey behavior |
+| Override tab on heading lines | ON      | Enable F2/F3 hotkey behavior |
 | Indent headings by level      | ON      | Visual per-level indentation |
-| Indent size (em)              | 0.5     | Spacing per heading level    |
-| Enable drag handles           | OFF     | Phase 2 feature flag         |
-# Changelog
-## 0.0.4
-- Fixed multi-selection preservation after indent/unindent operations
-- Fixed duplicate text changes when selecting nested headings
-- Fixed fold state preservation during all operations
-- Fixed smart parent unfolding when indenting into folded sections
-- Refactored to use native CodeMirror 6 API throughout
-## 0.0.3
-- Initial release with F1-F5 features
+| Indent size (em)              | 1.5     | Spacing per heading level    |

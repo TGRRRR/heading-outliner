@@ -11,16 +11,14 @@ declare module 'obsidian' {
 
 interface HeadingOutlinerSettings {
 	overrideTabOnHeadings: boolean;
-	enableDragHandles: boolean;
 	headingIndent: boolean;
 	indentSize: number;
 }
 
 const DEFAULT_SETTINGS: HeadingOutlinerSettings = {
 	overrideTabOnHeadings: true,
-	enableDragHandles: false,
 	headingIndent: true,
-	indentSize: 1.5,
+	indentSize: 0.5,
 };
 
 interface SectionRange {
@@ -122,41 +120,41 @@ function findSiblingSection(state: EditorState, section: SectionRange, direction
 	}
 }
 
-	function getFoldedRanges(state: EditorState): { from: number; to: number }[] {
-		const folded: { from: number; to: number }[] = [];
-		const iter = foldedRanges(state).iter();
-		while (iter.value) {
-			folded.push({ from: iter.from, to: iter.to });
-			iter.next();
+function getFoldedRanges(state: EditorState): { from: number; to: number }[] {
+	const folded: { from: number; to: number }[] = [];
+	const iter = foldedRanges(state).iter();
+	while (iter.value) {
+		folded.push({ from: iter.from, to: iter.to });
+		iter.next();
+	}
+	return folded;
+}
+
+function getFoldsInSections(
+	state: EditorState,
+	folds: { from: number; to: number }[],
+	sections: SectionRange[]
+): { from: number; to: number }[] {
+	const result: { from: number; to: number }[] = [];
+	for (const fold of folds) {
+		const foldLine = state.doc.lineAt(fold.from).number - 1;
+		const inSection = sections.some(s => s.startLine <= foldLine && foldLine <= s.endLine);
+		if (inSection) {
+			result.push(fold);
 		}
-		return folded;
 	}
+	return result;
+}
 
-	function getFoldsInSections(
-		state: EditorState,
-		folds: { from: number; to: number }[],
-		sections: SectionRange[]
-	): { from: number; to: number }[] {
-		const result: { from: number; to: number }[] = [];
-		for (const fold of folds) {
-			const foldLine = state.doc.lineAt(fold.from).number - 1;
-			const inSection = sections.some(s => s.startLine <= foldLine && foldLine <= s.endLine);
-			if (inSection) {
-				result.push(fold);
-			}
-		}
-		return result;
-	}
+function isLineFolded(state: EditorState, line: number, foldedRanges: { from: number; to: number }[]): boolean {
+	const docLine = state.doc.line(line + 1);
+	return foldedRanges.some(fr => fr.from >= docLine.from && fr.from <= docLine.to);
+}
 
-	function isLineFolded(state: EditorState, line: number, foldedRanges: { from: number; to: number }[]): boolean {
-		const docLine = state.doc.line(line + 1);
-		return foldedRanges.some(fr => fr.from >= docLine.from && fr.from <= docLine.to);
-	}
-
-	function getFoldAtLine(state: EditorState, line: number, folds: { from: number; to: number }[]): { from: number; to: number } | null {
-		const docLine = state.doc.line(line + 1);
-		return folds.find(fr => fr.from >= docLine.from && fr.from <= docLine.to) || null;
-	}
+function getFoldAtLine(state: EditorState, line: number, folds: { from: number; to: number }[]): { from: number; to: number } | null {
+	const docLine = state.doc.line(line + 1);
+	return folds.find(fr => fr.from >= docLine.from && fr.from <= docLine.to) || null;
+}
 
 function filterRootHeadings(headings: HeadingInfo[]): HeadingInfo[] {
 	if (headings.length <= 1) return headings;
@@ -202,8 +200,10 @@ function collectHeadingsFromSelections(state: EditorState): HeadingInfo[] {
 
 export default class HeadingOutlinerPlugin extends Plugin {
 	settings: HeadingOutlinerSettings;
+	styleEl: HTMLStyleElement;
 
 	async onload() {
+		this.styleEl = document.head.createEl('style');
 		await this.loadSettings();
 		this.applyStyle(this.settings.headingIndent, this.settings.indentSize);
 
@@ -248,7 +248,7 @@ export default class HeadingOutlinerPlugin extends Plugin {
 		});
 
 		this.registerEditorExtension(
-			Prec.highest(keymap.of([
+			Prec.high(keymap.of([
 				{
 					key: 'Tab',
 					run: (cmView: EditorView): boolean => this.handleTabKey(cmView, 1),
@@ -495,11 +495,12 @@ export default class HeadingOutlinerPlugin extends Plugin {
 
 	applyStyle(enabled: boolean, size: number) {
 		document.body.classList.toggle('heading-outliner-indent', enabled);
-		document.body.style.setProperty('--heading-indent-size', `${size}em`);
+		this.styleEl.textContent = `body.heading-outliner-indent { --heading-indent-size: ${size}em; }`;
 	}
 
 	onunload() {
 		this.applyStyle(false, 0);
+		this.styleEl.detach();
 	}
 }
 
@@ -516,7 +517,7 @@ class HeadingOutlinerSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName('Override Tab on heading lines')
+			.setName('Override tab on heading lines')
 			.setDesc('When enabled, Tab and Shift+Tab indent/unindent sections when the cursor is on a heading line.')
 			.addToggle(toggle =>
 				toggle
@@ -545,24 +546,12 @@ class HeadingOutlinerSettingTab extends PluginSettingTab {
 			.setDesc('How much each heading level is indented relative to the previous level.')
 			.addSlider(slider =>
 				slider
-					.setLimits(0.5, 4, 0.5)
+					.setLimits(0.1, 2, 0.1)
 					.setValue(this.plugin.settings.indentSize)
 					.setDynamicTooltip()
 					.onChange(async (value) => {
 						this.plugin.settings.indentSize = value;
 						this.plugin.applyStyle(this.plugin.settings.headingIndent, value);
-						await this.plugin.saveSettings();
-					})
-			);
-
-		new Setting(containerEl)
-			.setName('Enable drag handles')
-			.setDesc('Show drag handles in the gutter next to headings (Phase 2 feature).')
-			.addToggle(toggle =>
-				toggle
-					.setValue(this.plugin.settings.enableDragHandles)
-					.onChange(async (value) => {
-						this.plugin.settings.enableDragHandles = value;
 						await this.plugin.saveSettings();
 					})
 			);
