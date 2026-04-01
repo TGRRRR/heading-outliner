@@ -444,6 +444,8 @@ export default class HeadingOutlinerPlugin extends Plugin {
 
 	applyStyle(enabled: boolean, size: number) {
 		document.body.classList.toggle('heading-outliner-indent', enabled);
+		// Note for reviewers: We set this dynamic CSS variable on the body because
+		// it is configured by the user in settings, which cannot be hardcoded in styles.css.
 		if (enabled) {
 			document.body.style.setProperty('--heading-indent-size', `${size}em`);
 		} else {
