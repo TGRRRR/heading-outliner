@@ -138,10 +138,6 @@ function getFoldsInSections(
 	return result;
 }
 
-function isLineFolded(state: EditorState, line: number, foldedRanges: { from: number; to: number }[]): boolean {
-	const docLine = state.doc.line(line + 1);
-	return foldedRanges.some(fr => fr.from >= docLine.from && fr.from <= docLine.to);
-}
 
 function getFoldAtLine(state: EditorState, line: number, folds: { from: number; to: number }[]): { from: number; to: number } | null {
 	const docLine = state.doc.line(line + 1);
