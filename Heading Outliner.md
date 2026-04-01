@@ -19,7 +19,7 @@ The core mental model: a **section** (heading + all its content until next equal
 - Children and body content travel with the section
 - Works regardless of whether the section is folded or unfolded
 - Fold state is preserved: all previously folded lines are remapped by line-count delta and re-folded synchronously
-- **Hotkey**: `Ctrl+Shift+↑` / `Ctrl+Shift+↓` 
+- **Hotkey**: `Ctrl+Shift+↑` / `Ctrl+Shift+↓`
 - Uses CM6 keymap at `Prec.high` - strictly evaluates if cursor is on a heading line, gracefully yielding to the Outliner plugin for list item movement otherwise.
 - Single undoable transaction (one Ctrl+Z to undo)
 ## F2 Indent Section ✅
@@ -95,7 +95,7 @@ All hotkeys in Heading Outliner are hardcoded into a CodeMirror 6 keymap extensi
 ### Why not Obsidian's `addCommand()` with hotkeys?
 1. **Tab is not assignable:** Obsidian's hotkey editor does not recognize `Tab` as a valid key for hotkey assignment. Since `Tab`/`Shift+Tab` is the core indent/unindent mechanism, it must be handled at the CM6 level.
 2. **Context-aware pass-through is impossible via commands:** Obsidian commands are either active or not. There is no mechanism for a command to say "I don't want this keypress, pass it to the next handler." CM6 keymaps support this natively by returning `false` from the `run` handler, which lets the keypress fall through to other plugins (like Outliner) or default Obsidian behavior.
-3. **Conflict with the Outliner plugin:** When `Ctrl+Shift+Up/Down` was registered as an Obsidian command, users who also use the Outliner plugin would see a hotkey conflict warning in Settings. Worse, assigning the same hotkey to both plugins caused Outliner's list-item movement to stop working entirely — Heading Outliner would always intercept the keypress, even when the cursor was on a bullet point, not a heading.
+3. **Conflict with the Outliner plugin:** When `Ctrl+Shift+Up/Down` was registered as an Obsidian command, users who also use the Outliner plugin would see a hotkey conflict warning in Settings. Worse, assigning the same hotkey to both plugins caused Outliner's list-item movement to stop working entirely - Heading Outliner would always intercept the keypress, even when the cursor was on a bullet point, not a heading.
 ### Options considered
 | Option                                                     | Verdict                                                                                                                                                                                                                        |
 | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

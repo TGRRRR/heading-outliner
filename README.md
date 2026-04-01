@@ -26,14 +26,13 @@ Fully compatible with the [Outliner](https://github.com/vslinko/obsidian-outline
 3. Place the three files inside that folder
 4. Reload Obsidian → **Settings → Community plugins** → enable **Heading Outliner**
 # Keyboard hotkeys
-
 | Action            | Hotkey                        |
 | ----------------- | ----------------------------- |
 | Move section up   | `Ctrl+Shift+↑`                |
 | Move section down | `Ctrl+Shift+↓`                |
 | Indent section    | `Tab` (on heading line)       |
 | Unindent section  | `Shift+Tab` (on heading line) |
-> Hotkeys are handled via CodeMirror 6 keymaps and are not exposed to Obsidian's hotkey manager. This is intentional: these keys need context-aware interception (activate only on heading lines, pass through otherwise) which Obsidian's command system cannot provide (see [Hotkey Architecture Dilemma](https://github.com/tgrrrr/heading-outliner/blob/main/Heading%20Outliner.md#hotkey-architecture-dilemma)). Custom modifier configuration is planned for a future release. 
+> Hotkeys are handled via CodeMirror 6 keymaps and are not exposed to Obsidian's hotkey manager. This is intentional: these keys need context-aware interception (activate only on heading lines, pass through otherwise) which Obsidian's command system cannot provide (see [Hotkey Architecture Dilemma](https://github.com/tgrrrr/heading-outliner/blob/main/Heading%20Outliner.md#hotkey-architecture-dilemma)). Custom modifier configuration is planned for a future release.
 # Settings
 | Setting | Default | Description |
 |---------|---------|-------------|
