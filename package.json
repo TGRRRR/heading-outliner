@@ -1,6 +1,6 @@
 {
   "name": "heading-outliner",
-  "version": "0.0.4",
+  "version": "1.0.0",
   "description": "Outliner-style editing for heading-based Markdown: move, indent, and unindent full sections with keyboard shortcuts.",
   "main": "main.js",
   "scripts": {

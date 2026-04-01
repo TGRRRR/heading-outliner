@@ -16,13 +16,19 @@ Should work with Outliner plugin without conflicts.
 | Move section down | `Ctrl+Shift+↓` |
 | Indent section | `Tab` (on heading line) |
 | Unindent section | `Shift+Tab` (on heading line) |
+> All shortcuts are handled via CodeMirror 6 keymaps and are not exposed to Obsidian's hotkey manager. This is intentional: these keys need context-aware interception (activate only on heading lines, pass through otherwise) which Obsidian's command system cannot provide. Custom modifier configuration is planned for a future release.
 # Settings
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Override tab on heading lines | On | Enable indent/unindent on heading lines |
 | Indent headings by level | On | Visually indent headings by level |
 | Indent size (em) | 0.5 | Spacing per heading level |
+# Roadmap
+- [ ] Implement moving all selected blocks up/down, same way as indenting/unindenting selected blocks work
+- [ ] Implement custom movement modifier configuration via individual ALT, CTRL, SHIFT boolean toggles in settings
+- [ ] Implement Drag-n-drop
 # Changelog
+## 1.0.0
+- Prepared for release
 ## 0.0.4
 - **Fixed:** Multi-selection now preserves all selections after indent/unindent
 - **Fixed:** Nested headings no longer cause duplicate text changes

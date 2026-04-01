@@ -3,6 +3,8 @@ import { Prec, EditorState, EditorSelection, ChangeSpec, StateEffect, ChangeSet 
 import { keymap, EditorView } from '@codemirror/view';
 import { foldedRanges, foldEffect, foldable, unfoldEffect } from '@codemirror/language';
 
+// We need to access the underlying CodeMirror 6 EditorView for advanced operations.
+// This is an undocumented property, but necessary for CM6-specific features in Desktop.
 declare module 'obsidian' {
 	interface Editor {
 		cm?: EditorView;
@@ -10,13 +12,11 @@ declare module 'obsidian' {
 }
 
 interface HeadingOutlinerSettings {
-	overrideTabOnHeadings: boolean;
 	headingIndent: boolean;
 	indentSize: number;
 }
 
 const DEFAULT_SETTINGS: HeadingOutlinerSettings = {
-	overrideTabOnHeadings: true,
 	headingIndent: true,
 	indentSize: 0.5,
 };
@@ -200,52 +200,12 @@ function collectHeadingsFromSelections(state: EditorState): HeadingInfo[] {
 
 export default class HeadingOutlinerPlugin extends Plugin {
 	settings: HeadingOutlinerSettings;
-	styleEl: HTMLStyleElement;
 
 	async onload() {
-		this.styleEl = document.head.createEl('style');
 		await this.loadSettings();
 		this.applyStyle(this.settings.headingIndent, this.settings.indentSize);
 
-		this.addCommand({
-			id: 'move-section-up',
-			name: 'Move section up',
-			editorCallback: (editor: Editor) => {
-				if (editor.cm) this.moveSectionCM6(editor.cm, 'up');
-			},
-		});
 
-		this.addCommand({
-			id: 'move-section-down',
-			name: 'Move section down',
-			editorCallback: (editor: Editor) => {
-				if (editor.cm) this.moveSectionCM6(editor.cm, 'down');
-			},
-		});
-
-		this.addCommand({
-			id: 'indent-section',
-			name: 'Indent section',
-			editorCheckCallback: (checking: boolean, editor: Editor) => {
-				if (!editor.cm) return false;
-				const cursorLine = editor.cm.state.doc.lineAt(editor.cm.state.selection.main.head).number - 1;
-				if (findCurrentHeadingLine(editor.cm.state, cursorLine) < 0) return false;
-				if (!checking) this.changeIndentCM6(editor.cm, 1);
-				return true;
-			},
-		});
-
-		this.addCommand({
-			id: 'unindent-section',
-			name: 'Unindent section',
-			editorCheckCallback: (checking: boolean, editor: Editor) => {
-				if (!editor.cm) return false;
-				const cursorLine = editor.cm.state.doc.lineAt(editor.cm.state.selection.main.head).number - 1;
-				if (findCurrentHeadingLine(editor.cm.state, cursorLine) < 0) return false;
-				if (!checking) this.changeIndentCM6(editor.cm, -1);
-				return true;
-			},
-		});
 
 		this.registerEditorExtension(
 			Prec.high(keymap.of([
@@ -272,8 +232,6 @@ export default class HeadingOutlinerPlugin extends Plugin {
 	}
 
 	handleTabKey(cmView: EditorView, delta: number): boolean {
-		if (!this.settings.overrideTabOnHeadings) return false;
-
 		const state = cmView.state;
 		const cursorPos = state.selection.main.head;
 		const cursorLine = state.doc.lineAt(cursorPos).number - 1;
@@ -289,7 +247,8 @@ export default class HeadingOutlinerPlugin extends Plugin {
 		const state = cmView.state;
 		const cursorLine = state.doc.lineAt(state.selection.main.head).number - 1;
 
-		if (findCurrentHeadingLine(state, cursorLine) < 0) return false;
+		const currentLineLevel = getHeadingLevel(state.doc.line(cursorLine + 1).text);
+		if (currentLineLevel === 0) return false;
 
 		this.moveSectionCM6(cmView, direction);
 		return true;
@@ -495,12 +454,15 @@ export default class HeadingOutlinerPlugin extends Plugin {
 
 	applyStyle(enabled: boolean, size: number) {
 		document.body.classList.toggle('heading-outliner-indent', enabled);
-		this.styleEl.textContent = `body.heading-outliner-indent { --heading-indent-size: ${size}em; }`;
+		if (enabled) {
+			document.body.style.setProperty('--heading-indent-size', `${size}em`);
+		} else {
+			document.body.style.removeProperty('--heading-indent-size');
+		}
 	}
 
 	onunload() {
 		this.applyStyle(false, 0);
-		this.styleEl.detach();
 	}
 }
 
@@ -515,18 +477,6 @@ class HeadingOutlinerSettingTab extends PluginSettingTab {
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
-
-		new Setting(containerEl)
-			.setName('Override tab on heading lines')
-			.setDesc('When enabled, Tab and Shift+Tab indent/unindent sections when the cursor is on a heading line.')
-			.addToggle(toggle =>
-				toggle
-					.setValue(this.plugin.settings.overrideTabOnHeadings)
-					.onChange(async (value) => {
-						this.plugin.settings.overrideTabOnHeadings = value;
-						await this.plugin.saveSettings();
-					})
-			);
 
 		new Setting(containerEl)
 			.setName('Indent headings by level')
