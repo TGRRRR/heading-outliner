@@ -1,6 +1,6 @@
 {
   "name": "heading-outliner",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Outliner-style editing for heading-based Markdown: move, indent, and unindent full sections with keyboard shortcuts.",
   "main": "main.js",
   "scripts": {
@@ -14,10 +14,13 @@
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^16.11.29",
-    "builtin-modules": "^3.3.0",
     "esbuild": "0.17.3",
     "obsidian": "latest",
     "tslib": "2.4.0",
     "typescript": "4.9.5"
+  },
+  "dependencies": {
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/view": "^6.42.1"
   }
 }

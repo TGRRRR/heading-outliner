@@ -28,6 +28,9 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
+          body: |
+            ## What's Changed
+            See [CHANGELOG.md](https://github.com/TGRRRR/heading-outliner/blob/main/CHANGELOG.md) for details.
           files: |
             main.js
             manifest.json

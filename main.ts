@@ -435,17 +435,15 @@ export default class HeadingOutlinerPlugin extends Plugin {
 	}
 
 	async saveSettings() {
-		await this.saveData(this.settings);
+		await this.saveData(this.settings as unknown as Record<string, unknown>);
 	}
 
 	applyStyle(enabled: boolean, size: number) {
-		document.body.classList.toggle('heading-outliner-indent', enabled);
-		// Note for reviewers: We set this dynamic CSS variable on the body because
-		// it is configured by the user in settings, which cannot be hardcoded in styles.css.
+		activeDocument.body.classList.toggle('heading-outliner-indent', enabled);
 		if (enabled) {
-			document.body.style.setProperty('--heading-indent-size', `${size}em`);
+			activeDocument.body.style.setProperty('--heading-indent-size', `${size}em`);
 		} else {
-			document.body.style.removeProperty('--heading-indent-size');
+			activeDocument.body.style.removeProperty('--heading-indent-size');
 		}
 	}
 
