@@ -1,5 +1,8 @@
 # Heading Outliner
 Heading Outliner is an Obsidian plugin that brings **Outliner-style editing** to heading-based Markdown. Move, indent, and unindent entire sections using the same keyboard hotkeys as bullet lists.
+
+![](Heading%20Outliner%20Showcase.gif)
+
 # Features
 ## Section movement (`Ctrl+Shift+↑` / `Ctrl+Shift+↓`)
 Move a heading and all its content (body text + sub-headings) up or down past sibling sections. Fold state is preserved - sections that were folded before the move stay folded afterward.
@@ -11,21 +14,10 @@ Optional per-level indentation in both the editor and reading view, styled via C
 ## Compatibility with Outliner
 Fully compatible with the [Outliner](https://github.com/vslinko/obsidian-outliner) plugin. Both plugins use context-aware CM6 keymaps: Heading Outliner intercepts keypresses only when the cursor is on a heading line and explicitly passes through to Outliner on bullet/list lines. There are no hotkey conflicts.
 # Installation
-## Community plugins (not supported yet)
-1. Open Obsidian → **Settings → Community plugins**
-2. Disable **Safe mode** if prompted
-3. Click **Browse** and search for **Heading Outliner**
-4. Click **Install**, then **Enable**
-## BRAT (beta testing)
-1. Install the [BRAT plugin](https://github.com/TfTHacker/obsidian42-brat)
-2. Open BRAT settings → **Add Beta Plugin**
-3. Paste: `https://github.com/tgrrrr/heading-outliner`
-## Manual
-1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/tgrrrr/heading-outliner/releases/latest)
-2. Create folder `<vault>/.obsidian/plugins/heading-outliner/`
-3. Place the three files inside that folder
-4. Reload Obsidian → **Settings → Community plugins** → enable **Heading Outliner**
-# Keyboard hotkeys
+[Obsidian Community - Heading Outliner](https://community.obsidian.md/plugins/heading-outliner)
+
+Or just search **Heading Outliner** in Obsidian Settings → Community plugins → Browse
+# Hotkeys
 | Action            | Hotkey                        |
 | ----------------- | ----------------------------- |
 | Move section up   | `Ctrl+Shift+↑`                |
@@ -43,7 +35,7 @@ Fully compatible with the [Outliner](https://github.com/vslinko/obsidian-outline
 - [ ] Implement custom movement modifier configuration via individual ALT, CTRL, SHIFT boolean toggles in settings
 - [ ] Implement Drag-n-drop
 # Changelog
-## 1.0.0
+## 1.0.2
 - Prepared for release, bugs fixed
 ## 0.0.4
 - **Fixed:** Multi-selection now preserves all selections after indent/unindent
@@ -52,4 +44,4 @@ Fully compatible with the [Outliner](https://github.com/vslinko/obsidian-outline
 - **Fixed:** When indenting into a folded parent, only that parent unfolds (siblings stay folded)
 - **Refactored:** All operations now use native CodeMirror 6 API for better reliability
 ## 0.0.3
-- Initial release with core features (F1-F5)
+- Initial release with core features
