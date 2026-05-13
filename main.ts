@@ -431,7 +431,8 @@ export default class HeadingOutlinerPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		const data = await this.loadData();
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, data as Partial<HeadingOutlinerSettings> | null);
 	}
 
 	async saveSettings() {
