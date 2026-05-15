@@ -9,6 +9,16 @@ Move a heading and all its content (body text + sub-headings) up or down past si
 ## Indent / unindent (`Tab` / `Shift+Tab`)
 Increase or decrease heading levels. Tab/Shift+Tab only activates when the cursor is on a heading line - body text and list items are unaffected. Supports single or multiple selected headings (range selection or multi-cursor). Fold state is preserved.
 **Smart fold handling:** When indenting a heading to become a child of a folded parent, the parent automatically unfolds to show the new child. All other fold states remain unchanged.
+## Progressive outline folding (Fold more / Fold less)
+Expand or collapse the document outline level by level, operating on all **selected visible headings** at once. Works seamlessly with Obsidian's built-in fold commands.
+
+**Workflow:** Use Obsidian's `Fold all headings and lists` to collapse everything, then run **Fold less** to reveal one heading level at a time across your selection. Run **Fold more** to collapse back down. When nothing is selected, the command falls back to the heading under the cursor.
+
+| Action | Behavior |
+|--------|----------|
+| Fold less | Unfolds the shallowest folded heading level among selected visible headings |
+| Fold more | Folds the deepest unfolded heading level among selected visible headings |
+
 ## Visual heading indent
 Optional per-level indentation in both the editor and reading view, styled via CSS.
 ## Compatibility with Outliner
@@ -35,6 +45,9 @@ Or just search **Heading Outliner** in Obsidian Settings â†’ Community plugins â
 - [ ] Implement custom movement modifier configuration via individual ALT, CTRL, SHIFT boolean toggles in settings
 - [ ] Implement Drag-n-drop
 # Changelog
+## 1.1.0
+- **New:** `Fold more` and `Fold less` commands for progressive outline folding
+- **New:** Commands operate on all selected visible headings, falling back to cursor heading when nothing is selected
 ## 1.0.2
 - Prepared for release, bugs fixed
 ## 0.0.4

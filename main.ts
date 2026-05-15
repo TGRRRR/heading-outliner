@@ -1,4 +1,4 @@
-import { App, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Editor, MarkdownView, Plugin, PluginSettingTab, Setting } from 'obsidian';
 import { Prec, EditorState, EditorSelection, ChangeSpec, StateEffect, ChangeSet } from '@codemirror/state';
 import { keymap, EditorView } from '@codemirror/view';
 import { foldedRanges, foldEffect, foldable, unfoldEffect } from '@codemirror/language';
@@ -186,6 +186,35 @@ function collectHeadingsFromSelections(state: EditorState): HeadingInfo[] {
 	return headings;
 }
 
+function getSelectedVisibleHeadings(state: EditorState, folds: { from: number; to: number }[]): { line: number; level: number }[] {
+	const headings: { line: number; level: number }[] = [];
+	const seenLines = new Set<number>();
+
+	for (const range of state.selection.ranges) {
+		const fromLine = state.doc.lineAt(range.from).number - 1;
+		const toLine = state.doc.lineAt(range.to).number - 1;
+
+		for (let line = fromLine; line <= toLine; line++) {
+			const level = getHeadingLevel(state.doc.line(line + 1).text);
+			if (level === 0) continue;
+			if (seenLines.has(line)) continue;
+
+			const docLine = state.doc.line(line + 1);
+			const isHidden = folds.some(f => f.from < docLine.from && f.to > docLine.from);
+			if (isHidden) continue;
+
+			seenLines.add(line);
+			headings.push({ line, level });
+		}
+	}
+
+	return headings;
+}
+
+function isSingleCursor(state: EditorState): boolean {
+	return state.selection.ranges.every(r => r.from === r.to);
+}
+
 export default class HeadingOutlinerPlugin extends Plugin {
 	settings: HeadingOutlinerSettings;
 
@@ -215,6 +244,24 @@ export default class HeadingOutlinerPlugin extends Plugin {
 		);
 
 		this.addSettingTab(new HeadingOutlinerSettingTab(this.app, this));
+
+		this.addCommand({
+			id: 'fold-more',
+			name: 'Fold more',
+			editorCallback: (editor: Editor) => {
+				const cmView = (editor as any).cm as EditorView;
+				this.foldMoreSelection(cmView);
+			}
+		});
+
+		this.addCommand({
+			id: 'fold-less',
+			name: 'Fold less',
+			editorCallback: (editor: Editor) => {
+				const cmView = (editor as any).cm as EditorView;
+				this.foldLessSelection(cmView);
+			}
+		});
 	}
 
 	handleTabKey(cmView: EditorView, delta: number): boolean {
@@ -427,6 +474,86 @@ export default class HeadingOutlinerPlugin extends Plugin {
 
 		if (newFoldEffects.length > 0) {
 			cmView.dispatch({ effects: newFoldEffects });
+		}
+	}
+
+	foldLessSelection(cmView: EditorView) {
+		const state = cmView.state;
+		const folds = getFoldedRanges(state);
+
+		let targetHeadings: { line: number; level: number }[];
+		if (isSingleCursor(state)) {
+			const cursorLine = state.doc.lineAt(state.selection.main.head).number - 1;
+			const headingLine = findCurrentHeadingLine(state, cursorLine);
+			if (headingLine < 0) return;
+			targetHeadings = [{ line: headingLine, level: getHeadingLevel(state.doc.line(headingLine + 1).text) }];
+		} else {
+			targetHeadings = getSelectedVisibleHeadings(state, folds);
+		}
+
+		if (targetHeadings.length === 0) return;
+
+		const foldedHeadings = targetHeadings.filter(h => {
+			const docLine = state.doc.line(h.line + 1);
+			return folds.some(f => f.from >= docLine.from && f.from <= docLine.to);
+		});
+
+		if (foldedHeadings.length === 0) return;
+
+		const minLevel = Math.min(...foldedHeadings.map(h => h.level));
+
+		const effects: StateEffect<unknown>[] = [];
+		for (const h of foldedHeadings) {
+			if (h.level !== minLevel) continue;
+			const docLine = state.doc.line(h.line + 1);
+			const fold = folds.find(f => f.from >= docLine.from && f.from <= docLine.to);
+			if (fold) {
+				effects.push(unfoldEffect.of(fold));
+			}
+		}
+
+		if (effects.length > 0) {
+			cmView.dispatch({ effects });
+		}
+	}
+
+	foldMoreSelection(cmView: EditorView) {
+		const state = cmView.state;
+		const folds = getFoldedRanges(state);
+
+		let targetHeadings: { line: number; level: number }[];
+		if (isSingleCursor(state)) {
+			const cursorLine = state.doc.lineAt(state.selection.main.head).number - 1;
+			const headingLine = findCurrentHeadingLine(state, cursorLine);
+			if (headingLine < 0) return;
+			targetHeadings = [{ line: headingLine, level: getHeadingLevel(state.doc.line(headingLine + 1).text) }];
+		} else {
+			targetHeadings = getSelectedVisibleHeadings(state, folds);
+		}
+
+		if (targetHeadings.length === 0) return;
+
+		const unfoldedHeadings = targetHeadings.filter(h => {
+			const docLine = state.doc.line(h.line + 1);
+			return !folds.some(f => f.from >= docLine.from && f.from <= docLine.to);
+		});
+
+		if (unfoldedHeadings.length === 0) return;
+
+		const maxLevel = Math.max(...unfoldedHeadings.map(h => h.level));
+
+		const effects: StateEffect<unknown>[] = [];
+		for (const h of unfoldedHeadings) {
+			if (h.level !== maxLevel) continue;
+			const docLine = state.doc.line(h.line + 1);
+			const foldRange = foldable(state, docLine.from, docLine.to);
+			if (foldRange) {
+				effects.push(foldEffect.of(foldRange));
+			}
+		}
+
+		if (effects.length > 0) {
+			cmView.dispatch({ effects });
 		}
 	}
 
