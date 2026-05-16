@@ -19,6 +19,8 @@ Expand or collapse the document outline level by level, operating on all **selec
 | Fold less | Unfolds the shallowest folded heading level among selected visible headings |
 | Fold more | Folds the deepest unfolded heading level among selected visible headings |
 
+![](Heading%20Outliner%20Showcase%20-%20fold%20More%20%26%20Less.gif)
+
 ## Visual heading indent
 Optional per-level indentation in both the editor and reading view, styled via CSS.
 ## Compatibility with Outliner
